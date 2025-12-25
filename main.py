@@ -12,72 +12,38 @@ st.set_page_config(page_title="지름신 판독기", layout="centered")
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
-    
-    .block-container {
-        max-width: 500px !important;
-        padding-top: 5rem !important;
-    }
-
-    html, body, [class*="css"] { 
-        font-family: 'Noto Sans KR', sans-serif; 
-        background-color: #000000 !important; 
-        color: #FFFFFF !important;
-    }
-    
-    .unified-header {
-        background-color: #FFFFFF;
-        color: #000000 !important;
-        text-align: center;
-        font-size: 1.8rem;
-        font-weight: 800;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 5px;
-    }
-    
-    .sub-header {
-        background-color: #FFFFFF;
-        color: #000000 !important;
-        text-align: center;
-        font-size: 1.4rem;
-        font-weight: 700;
-        padding: 8px;
-        border-radius: 5px;
-        margin-bottom: 2.5rem;
-    }
-
-    .result-content {
-        margin-top: 30px;
-        padding: 15px;
-        border-top: 1px solid #333;
-    }
+    .block-container { max-width: 500px !important; padding-top: 5rem !important; }
+    html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; background-color: #000000 !important; color: #FFFFFF !important; }
+    .unified-header { background-color: #FFFFFF; color: #000000 !important; text-align: center; font-size: 1.8rem; font-weight: 800; padding: 15px; border-radius: 8px; margin-bottom: 5px; }
+    .sub-header { background-color: #FFFFFF; color: #000000 !important; text-align: center; font-size: 1.4rem; font-weight: 700; padding: 8px; border-radius: 5px; margin-bottom: 2.5rem; }
+    .result-content { margin-top: 30px; padding: 15px; border-top: 1px solid #333; }
     </style>
     """, unsafe_allow_html=True)
+
+# 2. 강력한 초기화 함수 (F5와 동일 효과)
+def hard_reset():
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    for key in st.session_state.keys():
+        del st.session_state[key]
+    # URL에 타임스탬프를 섞어 브라우저가 완전히 새 페이지로 인식하게 만듦
+    import time
+    st.query_params.from_dict({"refresh": str(time.time())})
+    st.rerun()
 
 # 헤더
 st.markdown('<div class="unified-header">⚖️ 지름신 판독기</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">AI 판사님의 뼈 때리는 판결</div>', unsafe_allow_html=True)
 
-# ----------------------------------------------------------------
-# 핵심: F5와 동일한 동작을 수행하는 자바스크립트 주입
-# ----------------------------------------------------------------
-def trigger_f5():
-    # window.parent.location.reload(true)는 브라우저 캐시를 무시하고 
-    # 서버에서 새 데이터를 가져오는 가장 강력한 새로고침(Hard Reload) 명령어입니다.
-    st.markdown("""
-        <img src="x" onerror="window.parent.location.reload(true);" style="display:none;">
-        """, unsafe_allow_html=True)
-    st.stop()
-
-# 입력 섹션
+# 입력 섹션 (키값을 고정하여 관리)
 mode = st.radio("⚖️ 판독 모드 선택", ["행복 회로", "팩트 폭격", "AI 판결"])
 tab1, tab2, tab3 = st.tabs(["🔗 URL 입력", "📸 이미지 업로드", "✍️ 직접 입력하기"])
 
-final_name = ""
-final_price = 0
+raw_name = ""
+raw_price = 0
 
 with tab1:
-    url = st.text_input("상품 URL 입력", key="url_input")
+    st.text_input("상품 URL 입력", key="url_input")
 
 with tab2:
     uploaded_file = st.file_uploader("스크린샷 업로드", type=['png', 'jpg', 'jpeg'], key="file_input")
@@ -88,60 +54,56 @@ with tab2:
             text = pytesseract.image_to_string(img, lang='kor+eng')
             price_match = re.search(r'([0-9,]{3,})원', text)
             if price_match:
-                final_price = int(price_match.group(1).replace(',', ''))
+                raw_price = int(price_match.group(1).replace(',', ''))
             lines = [line.strip() for line in text.split('\n') if len(line.strip()) > 3]
-            if lines: final_name = lines[0]
+            if lines: raw_name = lines[0]
         except: pass
 
 with tab3:
-    manual_name = st.text_input("상품명 직접 입력", key="m_name")
-    manual_price = st.text_input("가격 직접 입력", key="m_price")
-    if manual_name: final_name = manual_name
-    if manual_price: 
-        try: final_price = int(re.sub(r'[^0-9]', '', manual_price))
+    m_name = st.text_input("상품명 직접 입력", key="m_name")
+    m_price = st.text_input("가격 직접 입력 (숫자만)", key="m_price")
+    if m_name: raw_name = m_name
+    if m_price: 
+        try: raw_price = int(re.sub(r'[^0-9]', '', m_price))
         except: pass
 
-# 판결 실행
+# 판결 버튼
 if st.button("⚖️ 최종 판결 내리기"):
-    if not final_name or final_price == 0:
-        st.error("❗ 정보가 부족합니다. '직접 입력하기' 탭에서 정보를 완성해 주세요.")
+    if not raw_name or raw_price == 0:
+        st.error("❗ 정보가 부족합니다. 직접 입력 탭에서 정보를 완성해 주세요.")
     else:
         st.markdown('<div class="result-content">', unsafe_allow_html=True)
         
+        # 가격 계산 버그 방지: 1회성 고정 계산
+        calc_min = int(raw_price * 0.82)
+        calc_avg = int(raw_price * 0.93)
+        
         if mode == "행복 회로":
-            st.subheader(f"🔥 {final_name}: 즉시 지름!")
-            st.write("🚀 이것은 소비가 아니라 인생을 위한 투자입니다. 고민은 배송만 늦출 뿐!")
-        
+            st.subheader(f"🔥 {raw_name}: 즉시 지름!")
+            st.write("🚀 고민은 배송만 늦출 뿐! 미래의 나를 위한 선물입니다.")
         elif mode == "팩트 폭격":
-            st.subheader(f"❄️ {final_name}: 지름 금지!")
-            st.write("💀 정신 차리세요. 이 돈이면 국밥이 몇 그릇입니까? 통장 잔고가 울고 있습니다.")
-        
+            st.subheader(f"❄️ {raw_name}: 지름 금지!")
+            st.write("💀 이 돈이면 국밥이 몇 그릇입니까? 당장 창을 닫으세요.")
         elif mode == "AI 판결":
             st.subheader("⚖️ AI 정밀 분석 결과")
-            min_estimate = int(final_price * 0.82)
-            avg_market = int(final_price * 0.93)
+            st.write(f"📊 분석 상품: **{raw_name}**")
+            st.write(f"💰 현재 감지가: **{raw_price:,}원**")
+            st.success(f"📉 역대 최저가(추정): **{calc_min:,}원**")
+            st.info(f"💡 적정 구매가: **{calc_avg:,}원** 수준")
             
-            st.write(f"📊 분석 상품: **{final_name}**")
-            st.write(f"💰 현재 감지가: **{final_price:,}원**")
-            st.success(f"📉 역대 최저가(추정): **{min_estimate:,}원**")
-            st.info(f"💡 일반적인 적정가: **{avg_market:,}원** 수준입니다.")
-            
-            search_q = urllib.parse.quote(f"{final_name} 구매 가격 후기 리뷰")
+            search_q = urllib.parse.quote(f"{raw_name} 구매 가격 후기 리뷰")
             st.markdown("---")
-            st.markdown(f"🛒 [{final_name} 가격 정보 및 리뷰 확인](https://www.google.com/search?q={search_q})")
+            st.markdown(f"🛒 [{raw_name} 가격 정보 확인](https://www.google.com/search?q={search_q})")
 
-            if final_price > avg_market * 1.05:
-                st.error("❌ 판결: 현재 가격은 바가지입니다! 세일 기간을 기다리세요.")
+            if raw_price > calc_avg * 1.05:
+                st.error("❌ 판결: 거품 낀 가격입니다. 절대 사지 마세요!")
             else:
-                st.success("✅ 판결: 훌륭한 가격입니다! 지금 바로 지르셔도 좋습니다.")
-        
+                st.success("✅ 판결: 적정 가격입니다. 지름신을 영접하세요!")
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ----------------------------------------------------------------
-# 하단 초기화 버튼: 물리적 F5 명령 실행
-# ----------------------------------------------------------------
+# 하단 초기화 버튼 (강력한 리프레시 로직 연결)
 st.markdown("<br><br>", unsafe_allow_html=True)
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     if st.button("🔄 새로운 상품 판독하기"):
-        trigger_f5()
+        hard_reset()
