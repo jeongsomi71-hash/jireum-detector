@@ -8,7 +8,7 @@ import urllib.parse
 # 1. 페이지 설정
 st.set_page_config(page_title="지름신 판독기", layout="centered")
 
-# CSS: 디자인 통일 (흰색 배경 + 검정 글씨 헤더)
+# CSS: 디자인 설정
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
@@ -45,6 +45,12 @@ st.markdown("""
         border-radius: 5px;
         margin-bottom: 2.5rem;
     }
+
+    .result-content {
+        margin-top: 30px;
+        padding: 15px;
+        border-top: 1px solid #333;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -52,14 +58,18 @@ st.markdown("""
 st.markdown('<div class="unified-header">⚖️ 지름신 판독기</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">AI 판사님의 뼈 때리는 판결</div>', unsafe_allow_html=True)
 
-# 2. 강력한 초기화 함수: 자바스크립트를 이용한 메인 페이지 강제 이동
-def hard_refresh_with_js():
-    # 쿼리 파라미터를 비우고 페이지를 루트 주소로 강제 이동시킵니다.
-    # 이 방식은 브라우저가 보관하던 모든 폼 데이터(이미지, 텍스트)를 날려버립니다.
-    st.write('<section nonce="dummy"><script>window.parent.location.assign(window.parent.location.pathname);</script></section>', unsafe_allow_html=True)
+# ----------------------------------------------------------------
+# 핵심: F5와 동일한 동작을 수행하는 자바스크립트 주입
+# ----------------------------------------------------------------
+def trigger_f5():
+    # window.parent.location.reload(true)는 브라우저 캐시를 무시하고 
+    # 서버에서 새 데이터를 가져오는 가장 강력한 새로고침(Hard Reload) 명령어입니다.
+    st.markdown("""
+        <img src="x" onerror="window.parent.location.reload(true);" style="display:none;">
+        """, unsafe_allow_html=True)
     st.stop()
 
-# 입력 섹션 (각 위젯에 고유 key 부여)
+# 입력 섹션
 mode = st.radio("⚖️ 판독 모드 선택", ["행복 회로", "팩트 폭격", "AI 판결"])
 tab1, tab2, tab3 = st.tabs(["🔗 URL 입력", "📸 이미지 업로드", "✍️ 직접 입력하기"])
 
@@ -96,24 +106,42 @@ if st.button("⚖️ 최종 판결 내리기"):
     if not final_name or final_price == 0:
         st.error("❗ 정보가 부족합니다. '직접 입력하기' 탭에서 정보를 완성해 주세요.")
     else:
-        # (결과 출력 로직 생략 없이 그대로 유지)
-        st.markdown('---')
+        st.markdown('<div class="result-content">', unsafe_allow_html=True)
+        
         if mode == "행복 회로":
             st.subheader(f"🔥 {final_name}: 즉시 지름!")
-            st.write("🚀 고민은 배송만 늦출 뿐!")
+            st.write("🚀 이것은 소비가 아니라 인생을 위한 투자입니다. 고민은 배송만 늦출 뿐!")
+        
         elif mode == "팩트 폭격":
             st.subheader(f"❄️ {final_name}: 지름 금지!")
-            st.write("💀 정신 차리세요. 통장이 비어갑니다.")
+            st.write("💀 정신 차리세요. 이 돈이면 국밥이 몇 그릇입니까? 통장 잔고가 울고 있습니다.")
+        
         elif mode == "AI 판결":
-            st.subheader("⚖️ AI 정밀 분석")
+            st.subheader("⚖️ AI 정밀 분석 결과")
             min_estimate = int(final_price * 0.82)
-            st.write(f"📊 상품: **{final_name}** / 현재가: **{final_price:,}원**")
-            search_q = urllib.parse.quote(f"{final_name} 구매 가격 후기")
-            st.markdown(f"🛒 [{final_name} 가격 정보 확인](https://www.google.com/search?q={search_q})")
+            avg_market = int(final_price * 0.93)
+            
+            st.write(f"📊 분석 상품: **{final_name}**")
+            st.write(f"💰 현재 감지가: **{final_price:,}원**")
+            st.success(f"📉 역대 최저가(추정): **{min_estimate:,}원**")
+            st.info(f"💡 일반적인 적정가: **{avg_market:,}원** 수준입니다.")
+            
+            search_q = urllib.parse.quote(f"{final_name} 구매 가격 후기 리뷰")
+            st.markdown("---")
+            st.markdown(f"🛒 [{final_name} 가격 정보 및 리뷰 확인](https://www.google.com/search?q={search_q})")
 
-# 3. 하단 초기화 버튼 (가장 강력한 리다이렉트 방식)
+            if final_price > avg_market * 1.05:
+                st.error("❌ 판결: 현재 가격은 바가지입니다! 세일 기간을 기다리세요.")
+            else:
+                st.success("✅ 판결: 훌륭한 가격입니다! 지금 바로 지르셔도 좋습니다.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ----------------------------------------------------------------
+# 하단 초기화 버튼: 물리적 F5 명령 실행
+# ----------------------------------------------------------------
 st.markdown("<br><br>", unsafe_allow_html=True)
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     if st.button("🔄 새로운 상품 판독하기"):
-        hard_refresh_with_js()
+        trigger_f5()
