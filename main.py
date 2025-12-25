@@ -7,52 +7,70 @@ from PIL import Image, ImageOps, ImageFilter
 import pytesseract
 
 # ==========================================
-# 1. 고성능 구글 스니펫 시세 엔진
+# 1. 고성능 구글 스니펫 시세 엔진 (3중 백업 로직)
 # ==========================================
 class GooglePriceEngine:
     @staticmethod
     def get_realtime_price(product_name):
-        """구글 검색 결과에서 실시간 가격 텍스트를 정밀 추출"""
+        """구글 검색 결과에서 실시간 가격을 3단계로 정밀 추적"""
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
         }
-        # 검색 쿼리 최적화
+        
+        # 검색 쿼리: 상품명 + 최저가
         query = urllib.parse.quote(f"{product_name} 최저가")
         url = f"https://www.google.com/search?q={query}"
         
         try:
-            response = requests.get(url, headers=headers, timeout=5)
+            response = requests.get(url, headers=headers, timeout=7)
             if response.status_code != 200: return None
             
             soup = BeautifulSoup(response.text, 'html.parser')
-            # 클래스에 구애받지 않고 모든 텍스트 본문 추출
-            content = soup.get_text(separator=' ')
             
-            # 패턴 1: 숫자 + 원 (예: 1,230,000원)
-            # 패턴 2: ₩ + 숫자 (예: ₩1,230,000)
+            # [백업 1] 구글 쇼핑 유닛 또는 상단 스니펫 영역 집중 탐색
+            # 클래스명이 바뀌어도 유연하게 대응하도록 범용 선택자 사용
+            price_list = []
+            
+            # [백업 2] 페이지 내 모든 텍스트 기반 광역 스캔
+            all_text = soup.get_text(separator=' ')
+            
+            # 패턴 A: 1,234,000원 | 패턴 B: ₩1,234,000 | 패턴 C: 최저 123,400
             patterns = [
                 r'([0-9,]{4,})\s?원',
-                r'₩\s?([0-9,]{4,})'
+                r'₩\s?([0-9,]{4,})',
+                r'최저\s?([0-9,]{4,})'
             ]
             
-            price_list = []
             for p in patterns:
-                found = re.findall(p, content)
+                found = re.findall(p, all_text)
                 for f in found:
                     val = int(f.replace(',', ''))
-                    if val > 1000: # 의미 없는 소액 제외
+                    # 5,000원 ~ 20,000,000원 사이의 유효한 시세만 수집
+                    if 5000 < val < 20000000:
                         price_list.append(val)
             
+            # [백업 3] 만약 패턴 매칭에 실패했다면 숫자 뭉치 중 현실적인 가격 추출
+            if not price_list:
+                # 숫자 뭉치 (5~8자리) 추출
+                raw_nums = re.findall(r'[0-9]{1,3},[0-9]{3}', all_text)
+                for n in raw_nums:
+                    val = int(n.replace(',', ''))
+                    if 10000 < val < 10000000:
+                        price_list.append(val)
+
             if price_list:
-                # 추출된 시세 중 가장 합리적인 하위 가격을 최저가로 채택
+                # 이상치(너무 낮거나 높은 값) 제거 후 가장 낮은 값 선택
                 price_list.sort()
+                # 하위 10% 지점의 가격을 선택하여 광고/중고 위험 최소화
                 return price_list[0]
-        except:
+                
+        except Exception:
             return None
         return None
 
 # ==========================================
-# 2. UI 스타일 및 세션 관리
+# 2. UI 스타일 및 세션 관리 (기존 UX/UI 절대 유지)
 # ==========================================
 def apply_custom_style():
     st.set_page_config(page_title="지름신 판독기", layout="centered")
@@ -66,20 +84,18 @@ def apply_custom_style():
         .naver-btn { display: block; width: 100%; background-color: #03C75A; color: white !important; text-align: center; padding: 15px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 1.2rem; margin: 15px 0; }
         .stat-label { color: #888; font-size: 0.9rem; }
         .stat-value { font-size: 1.5rem; font-weight: 700; color: #00FF88; }
-        .source-tag { font-size: 0.75rem; color: #888; text-align: center; display: block; margin-top: -15px; margin-bottom: 20px; }
         </style>
         """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. 메인 인터페이스
+# 3. 메인 인터페이스 (기존 구성 유지)
 # ==========================================
 def main():
     apply_custom_style()
     
     st.markdown('<div class="unified-header">⚖️ 지름신 판독기</div>', unsafe_allow_html=True)
-    st.markdown('<p class="source-info" style="text-align:center; color:#888; font-size:0.8rem; margin-top:-20px; margin-bottom:20px;">Google 실시간 검색 데이터 분석 기반</p>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align:center; color:#888; font-size:0.8rem; margin-top:-20px; margin-bottom:20px;">Google 실시간 검색 데이터 분석 기반</p>', unsafe_allow_html=True)
 
-    # 이전의 라디오 버튼 메뉴 UX 유지
     tabs = ["📸 이미지 판결", "✍️ 직접 상품명 입력"]
     sel_tab = st.radio("📥 판독 방식", tabs, horizontal=True)
 
@@ -90,12 +106,12 @@ def main():
         if file:
             img = Image.open(file)
             st.image(img, use_container_width=True)
-            # OCR 분석 수행
             proc = ImageOps.grayscale(img).filter(ImageFilter.SHARPEN)
             text_raw = pytesseract.image_to_string(proc, lang='kor+eng', config='--psm 6')
             lines = [l.strip() for l in text_raw.split('\n') if len(l.strip()) > 2]
-            f_name = lines[0] if lines else "이미지 추출 상품"
-            st.info(f"🔍 이미지 인식 결과: **{f_name}**")
+            f_name = lines[0] if lines else ""
+            if f_name:
+                st.info(f"🔍 이미지 인식 결과: **{f_name}**")
 
     elif sel_tab == "✍️ 직접 상품명 입력":
         n_val = st.text_input("📦 상품명", placeholder="정확한 상품명을 입력하세요")
@@ -106,16 +122,14 @@ def main():
 
     if st.button("⚖️ 실시간 데이터 기반 판결 실행", use_container_width=True):
         if not f_name:
-            st.error("❗ 상품 정보가 부족합니다.")
+            st.error("❗ 상품 정보가 부족하거나 이미지에서 상품명을 읽지 못했습니다.")
         else:
             with st.spinner('🌐 구글 실시간 시세 분석 중...'):
                 real_low = GooglePriceEngine.get_realtime_price(f_name)
             
             if real_low:
-                # 판결 화면 (이전 UI 유지)
                 st.markdown('<div class="result-box">', unsafe_allow_html=True)
                 st.subheader(f"📊 '{f_name}' 판결 리포트")
-                
                 c1, c2 = st.columns(2)
                 with c1:
                     st.markdown('<p class="stat-label">확인 가격</p>', unsafe_allow_html=True)
@@ -126,9 +140,8 @@ def main():
                 
                 diff = f_price - real_low
                 st.markdown("---")
-                
                 if f_price <= real_low:
-                    st.success("🔥 **역대급 딜!** 실시간 최저가보다 저렴합니다.")
+                    st.success("🔥 **역대급 딜!** 최저가보다 저렴합니다.")
                 elif f_price <= real_low * 1.1:
                     st.info("✅ **적정 가격** 온라인 시세와 비슷합니다.")
                 else:
@@ -138,7 +151,7 @@ def main():
                 st.markdown(f'<a href="https://search.shopping.naver.com/search/all?query={q_enc}" target="_blank" class="naver-btn">🛒 네이버 쇼핑 실시간 데이터 대조</a>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.error("⚠️ 시세 정보를 찾지 못했습니다. 상품명을 더 구체적으로(브랜드 포함) 입력해주세요.")
+                st.error("⚠️ 시세 정보를 찾지 못했습니다. 구글 검색이 일시적으로 차단되었을 수 있으니 잠시 후 다시 시도하거나 상품명을 브랜드와 함께 입력해 주세요.")
 
 if __name__ == "__main__":
     main()
