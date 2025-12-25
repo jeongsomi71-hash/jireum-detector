@@ -4,11 +4,12 @@ import pytesseract
 import re
 import random
 import urllib.parse
+import time
 
 # 1. 페이지 설정
 st.set_page_config(page_title="지름신 판독기", layout="centered")
 
-# CSS: 상단 타이틀과 부제목의 디자인 및 폰트 사이즈 통일
+# CSS: 디자인 통일 및 레이아웃 설정
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
@@ -24,17 +25,15 @@ st.markdown("""
         color: #FFFFFF !important;
     }
     
-    /* 3. 타이틀과 부제목 폰트/색상 통일 (흰색 배경에 검정 글씨) */
     .unified-header {
         background-color: #FFFFFF;
         color: #000000 !important;
         text-align: center;
-        font-size: 1.8rem; /* 폰트 사이즈 동일하게 조정 */
+        font-size: 1.8rem;
         font-weight: 800;
         padding: 15px;
         border-radius: 8px;
         margin-bottom: 5px;
-        line-height: 1.2;
     }
     
     .sub-header {
@@ -56,20 +55,21 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. 상단 헤더 (디자인 통일)
+# 2. 강제 리프레시 함수 (F5와 동일한 효과)
+def hard_reset():
+    # 세션 상태 비우기
+    st.session_state.clear()
+    # URL에 타임스탬프를 추가하여 브라우저가 새로운 페이지로 인식하게 강제 이동
+    st.query_params.clear()
+    st.query_params.update({"refresh": str(time.time())})
+    # 즉시 실행
+    st.rerun()
+
+# 상단 헤더
 st.markdown('<div class="unified-header">⚖️ 지름신 판독기</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">AI 판사님의 뼈 때리는 판결</div>', unsafe_allow_html=True)
 
-# 2. 새로운 상품 판독하기: F5와 동일한 효과를 주는 함수
-def reset_app():
-    # 세션 상태 전체 비우기
-    for key in st.session_state.keys():
-        del st.session_state[key]
-    # JS를 활용한 브라우저 강제 새로고침 (F5 효과)
-    st.markdown('<script>window.location.reload();</script>', unsafe_allow_html=True)
-    st.rerun()
-
-# 입력 섹션
+# 입력 섹션 (세션 상태와 연결하여 초기화 대응)
 mode = st.radio("⚖️ 판독 모드 선택", ["행복 회로", "팩트 폭격", "AI 판결"])
 tab1, tab2, tab3 = st.tabs(["🔗 URL 입력", "📸 이미지 업로드", "✍️ 직접 입력하기"])
 
@@ -80,6 +80,7 @@ with tab1:
     url = st.text_input("상품 URL 입력", key="url_input")
 
 with tab2:
+    # key값을 고정하여 리프레시 시 초기화되도록 설정
     uploaded_file = st.file_uploader("스크린샷 업로드", type=['png', 'jpg', 'jpeg'], key="file_input")
     if uploaded_file:
         img = Image.open(uploaded_file)
@@ -107,38 +108,32 @@ if st.button("⚖️ 최종 판결 내리기"):
         st.error("❗ 정보가 부족합니다. '직접 입력하기' 탭에서 정보를 완성해 주세요.")
     else:
         st.markdown('<div class="result-content">', unsafe_allow_html=True)
-        
         if mode == "행복 회로":
             st.subheader(f"🔥 {final_name}: 즉시 지름!")
-            st.write("🚀 이것은 소비가 아니라 인생을 위한 투자입니다.")
+            st.write("🚀 미래의 나를 위한 투자입니다. 고민은 배송만 늦출 뿐!")
         elif mode == "팩트 폭격":
-            st.subheader(f"❄️ {final_name}: 지름 금지!")
-            st.write("💀 정신 차리세요. 이 돈이면 국밥이 몇 그릇입니까?")
+            st.subheader(f"❄️ {final_name}: 절대 금지!")
+            st.write("💀 이 돈이면 국밥이 몇 그릇입니까? 정신 차리세요.")
         elif mode == "AI 판결":
             st.subheader("⚖️ AI 정밀 분석")
             min_estimate = int(final_price * 0.82)
-            st.write(f"📊 상품: **{final_name}**")
+            st.write(f"📊 분석 상품: **{final_name}**")
             st.write(f"💰 분석가: **{final_price:,}원**")
             st.success(f"📉 추정 최저가: **{min_estimate:,}원**")
             
-            # 1. 가격/구매 정보가 포함된 리뷰 검색 링크 최적화
-            # 상품명 + "구매 가격 리뷰" 키워드 조합
+            # 검색 링크 최적화 (구매 가격 정보 포함)
             search_q = urllib.parse.quote(f"{final_name} 구매 가격 후기 리뷰")
-            google_url = f"https://www.google.com/search?q={search_q}"
-            
-            st.markdown("---")
-            st.markdown(f"🛒 [{final_name} 가격 정보 및 리뷰 확인]({google_url})")
+            st.markdown(f"🛒 [{final_name} 가격 정보 및 리뷰 확인](https://www.google.com/search?q={search_q})")
 
             if final_price > min_estimate * 1.15:
-                st.error("❌ 판결: 현재 가격은 바가지입니다. 기다리세요!")
+                st.error("❌ 판결: 거품 낀 가격입니다. 사지 마세요!")
             else:
-                st.success("✅ 판결: 적정가입니다. 지름신을 영접하세요!")
+                st.success("✅ 판결: 적정 가격입니다. 지름신을 영접하세요!")
         st.markdown('</div>', unsafe_allow_html=True)
 
-# 2. 하단 중앙 정렬 초기화 버튼
+# 하단 초기화 버튼 (강제 리셋 함수 호출)
 st.markdown("<br><br>", unsafe_allow_html=True)
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    # 클릭 시 브라우저를 완전히 새로고침하는 기능 연결
     if st.button("🔄 새로운 상품 판독하기"):
-        reset_app()
+        hard_reset()
