@@ -4,7 +4,7 @@ import pytesseract
 import re
 import random
 import urllib.parse
-import time
+import streamlit.components.v1 as components
 
 # 1. 페이지 설정
 st.set_page_config(page_title="지름신 판독기", layout="centered")
@@ -55,21 +55,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 강제 리프레시 함수 (F5와 동일한 효과)
-def hard_reset():
-    # 세션 상태 비우기
-    st.session_state.clear()
-    # URL에 타임스탬프를 추가하여 브라우저가 새로운 페이지로 인식하게 강제 이동
-    st.query_params.clear()
-    st.query_params.update({"refresh": str(time.time())})
-    # 즉시 실행
-    st.rerun()
-
-# 상단 헤더
+# 상단 헤더 (디자인 통일)
 st.markdown('<div class="unified-header">⚖️ 지름신 판독기</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">AI 판사님의 뼈 때리는 판결</div>', unsafe_allow_html=True)
 
-# 입력 섹션 (세션 상태와 연결하여 초기화 대응)
+# 입력 섹션
 mode = st.radio("⚖️ 판독 모드 선택", ["행복 회로", "팩트 폭격", "AI 판결"])
 tab1, tab2, tab3 = st.tabs(["🔗 URL 입력", "📸 이미지 업로드", "✍️ 직접 입력하기"])
 
@@ -80,7 +70,6 @@ with tab1:
     url = st.text_input("상품 URL 입력", key="url_input")
 
 with tab2:
-    # key값을 고정하여 리프레시 시 초기화되도록 설정
     uploaded_file = st.file_uploader("스크린샷 업로드", type=['png', 'jpg', 'jpeg'], key="file_input")
     if uploaded_file:
         img = Image.open(uploaded_file)
@@ -118,11 +107,12 @@ if st.button("⚖️ 최종 판결 내리기"):
             st.subheader("⚖️ AI 정밀 분석")
             min_estimate = int(final_price * 0.82)
             st.write(f"📊 분석 상품: **{final_name}**")
-            st.write(f"💰 분석가: **{final_price:,}원**")
+            st.write(f"💰 현재 감지가: **{final_price:,}원**")
             st.success(f"📉 추정 최저가: **{min_estimate:,}원**")
             
-            # 검색 링크 최적화 (구매 가격 정보 포함)
+            # 가격 정보 중심의 리뷰 검색 링크
             search_q = urllib.parse.quote(f"{final_name} 구매 가격 후기 리뷰")
+            st.markdown("---")
             st.markdown(f"🛒 [{final_name} 가격 정보 및 리뷰 확인](https://www.google.com/search?q={search_q})")
 
             if final_price > min_estimate * 1.15:
@@ -131,9 +121,17 @@ if st.button("⚖️ 최종 판결 내리기"):
                 st.success("✅ 판결: 적정 가격입니다. 지름신을 영접하세요!")
         st.markdown('</div>', unsafe_allow_html=True)
 
-# 하단 초기화 버튼 (강제 리셋 함수 호출)
+# 2. 하단 중앙 정렬 초기화 버튼 (JavaScript 강제 새로고침)
 st.markdown("<br><br>", unsafe_allow_html=True)
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     if st.button("🔄 새로운 상품 판독하기"):
-        hard_reset()
+        # 자바스크립트를 사용하여 브라우저 창을 강제로 새로고침(F5) 시킵니다.
+        components.html(
+            """
+            <script>
+            window.parent.location.reload();
+            </script>
+            """,
+            height=0,
+        )
