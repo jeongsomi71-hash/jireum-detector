@@ -23,7 +23,6 @@ st.markdown("""
         color: #FFFFFF !important;
     }
     
-    /* 1. 지름신 판독기 폰트 사이즈 2배 (약 5rem) */
     .main-title { 
         font-size: 5.5rem; 
         font-weight: 900; 
@@ -34,7 +33,6 @@ st.markdown("""
         margin-bottom: 15px;
     }
     
-    /* 2. 부제목: 흰색 배경에 검정색 글씨로 변경 (가독성 확보) */
     .sub-title-box {
         background-color: #FFFFFF;
         color: #000000 !important;
@@ -65,59 +63,73 @@ mode = st.radio("⚖️ 모드 선택", ["행복 회로", "팩트 폭격", "AI �
 
 tab1, tab2 = st.tabs(["🔗 URL 입력", "📸 이미지 업로드"])
 detected_price = 0
-product_name_input = ""
+ocr_product_name = ""
+
+# 1. 수동 입력 상품명을 가장 위에 배치 (사용자 경험 개선)
+manual_product_name = st.text_input("📝 판독할 상품명을 입력하세요", placeholder="예: 아이폰 15 프로")
 
 with tab1:
     url = st.text_input("상품 URL 입력", placeholder="https://...")
-    product_name_input = st.text_input("상품명 입력 (필수)", placeholder="예: 소니 헤드셋")
 
 with tab2:
     uploaded_file = st.file_uploader("스크린샷 업로드", type=['png', 'jpg', 'jpeg'])
     if uploaded_file:
         img = Image.open(uploaded_file)
         st.image(img, use_container_width=True)
-        try:
-            text = pytesseract.image_to_string(img, lang='kor+eng')
-            price_match = re.search(r'([0-9,]{3,})원', text)
-            if price_match:
-                detected_price = int(price_match.group(1).replace(',', ''))
-        except: pass
+        with st.spinner("이미지 분석 중..."):
+            try:
+                text = pytesseract.image_to_string(img, lang='kor+eng')
+                # 가격 추출
+                price_match = re.search(r'([0-9,]{3,})원', text)
+                if price_match:
+                    detected_price = int(price_match.group(1).replace(',', ''))
+                
+                # 이미지에서 상품명 후보군 추출 (빈 줄 제외 첫 번째 긴 문장)
+                lines = [line.strip() for line in text.split('\n') if len(line.strip()) > 3]
+                if lines:
+                    ocr_product_name = lines[0]
+            except:
+                st.error("이미지 분석에 실패했습니다. 상품명을 직접 입력해 주세요.")
 
 # 판결 문구 세트
 happy_quotes = ["🚀 이건 소비가 아니라 미래를 향한 풀매수!", "✨ 고민은 배송만 늦출 뿐! 바로 지르세요!", "💎 오늘 안 사면 꿈에 나옵니다. 지금이 기회!"]
 fact_quotes = ["💀 정신 차리세요. 이거 사고 일주일 뒤면 먼지만 쌓입니다.", "💸 통장이 텅장 되는 소리 안 들리나요? 참으세요.", "🚫 과소비는 병입니다. 이번엔 제발 넘어가세요."]
 
 if st.button("⚖️ 최종 판결 내리기"):
+    # 최종 상품명 결정 로직: 수동 입력 > OCR 추출 > 기본값
+    if manual_product_name:
+        final_name = manual_product_name
+    elif ocr_product_name:
+        final_name = ocr_product_name
+    else:
+        final_name = "미확인 상품"
+
     st.markdown('<div class="result-box">', unsafe_allow_html=True)
     
-    # 3. 상품명 + 리뷰 형태의 검색어 최적화
-    final_name = product_name_input if product_name_input else "해당 상품"
-    
     if mode == "행복 회로":
-        st.subheader("🔥 판결: 즉시 지름!")
+        st.subheader(f"🔥 {final_name}: 즉시 지름!")
         st.write(random.choice(happy_quotes))
 
     elif mode == "팩트 폭격":
-        st.subheader("❄️ 판결: 지름 금지!")
+        st.subheader(f"❄️ {final_name}: 지름 금지!")
         st.write(random.choice(fact_quotes))
 
     elif mode == "AI 판결":
-        st.subheader("⚖️ AI 판사님의 데이터 분석")
+        st.subheader(f"⚖️ AI 판사님의 {final_name} 분석")
         current_p = detected_price if detected_price > 0 else 150000
         min_p = int(current_p * 0.85)
         
         st.write(f"📊 분석 상품: **{final_name}**")
-        st.write(f"💰 현재가: **{current_p:,}원**")
-        st.info(f"💡 분석 결과, 과거 최저가 대비 현재는 적정가 범위입니다.")
+        st.write(f"💰 현재 감지가: **{current_p:,}원**")
+        st.info(f"💡 분석 결과, 이 상품의 적정가는 **{min_p:,}원** 이하입니다.")
         
         st.markdown("---")
         
-        # 검색어 수정: 상품명 + 리뷰 (불필요한 가격 정보 제외하여 정확도 상승)
+        # 구글 검색어: [상품명] + [리뷰 후기]
         search_q = urllib.parse.quote(f"{final_name} 솔직 리뷰 후기")
         google_url = f"https://www.google.com/search?q={search_q}"
         
         st.write("🔍 **판결 근거 확인:**")
-        # 요청사항 반영: "상품명 + 리뷰" 형태의 링크 텍스트
         st.markdown(f"🌐 [{final_name} 리뷰 확인하러 가기]({google_url})")
 
         if current_p > min_p * 1.1:
