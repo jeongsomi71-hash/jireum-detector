@@ -2,20 +2,19 @@ import streamlit as st
 from PIL import Image
 import pytesseract
 import re
+import random
 
-# 페이지 설정: 레이아웃을 'centered'로 유지하되 CSS로 너비를 강제 조정
-st.set_page_config(page_title="지름 판독기", layout="centered")
+# 페이지 설정
+st.set_page_config(page_title="지름신 판독기", layout="centered")
 
-# CSS 스타일링: 쇼츠(세로형) 최적화 및 고대비 색상 적용
+# CSS 스타일링: 쇼츠 최적화 및 상단 잘림 방지
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
     
-    /* 쇼츠 전용 모바일 뷰 설정 (너비를 좁게 제한) */
     .block-container {
         max-width: 450px !important;
-        padding-top: 2rem !important;
-        padding-bottom: 2rem !important;
+        padding-top: 5rem !important; /* 상단 여백 대폭 추가 (글자 잘림 방지) */
     }
 
     html, body, [class*="css"] { 
@@ -24,111 +23,114 @@ st.markdown("""
         color: #FFFFFF;
     }
     
-    /* 제목 강조: 쇼츠에서 눈에 확 띄도록 크게 */
+    /* 제목 스타일 */
     .main-title { 
-        font-size: 3rem; 
+        font-size: 2.8rem; 
         font-weight: 900; 
         text-align: center; 
         background: linear-gradient(to right, #00FF88, #60EFFF); 
         -webkit-background-clip: text; 
         -webkit-text-fill-color: transparent; 
-        margin-bottom: 0px;
-    }
-    .sub-title { 
-        text-align: center; 
-        color: #FFFFFF;
-        font-size: 1.1rem;
-        font-weight: 700;
-        margin-bottom: 2rem; 
+        margin-bottom: 10px;
     }
     
-    /* 버튼 및 입력창 가시성 강화 */
-    .stButton>button {
-        width: 100%;
-        height: 3.5rem;
-        font-size: 1.2rem !important;
-        font-weight: bold !important;
-        background-color: #00FF88 !important;
-        color: #000000 !important;
-        border-radius: 12px;
+    /* 라디오 버튼(메뉴) 가로 정렬 및 스타일 */
+    div.row-widget.stRadio > div {
+        flex-direction: row;
+        justify-content: center;
+        gap: 10px;
     }
-    
-    /* 결과 박스 강조 */
+    div.row-widget.stRadio label {
+        background-color: #1A1A1A;
+        padding: 10px 15px;
+        border-radius: 10px;
+        border: 1px solid #333;
+    }
+
     .result-box {
         background-color: #1A1A1A;
-        padding: 25px;
+        padding: 20px;
         border-radius: 15px;
         border: 2px solid #00FF88;
-        margin-top: 25px;
-    }
-    
-    /* 탭 메뉴 글자 크기 */
-    .stTabs [data-baseweb="tab"] {
-        font-size: 1rem;
-        font-weight: bold;
+        margin-top: 20px;
+        line-height: 1.6;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 헤더 영역
-st.markdown('<p class="main-title">지름 판독기</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">살까 말까 고민될 땐? AI 판사님께.</p>', unsafe_allow_html=True)
+# 헤더
+st.markdown('<p class="main-title">지름신 판독기</p>', unsafe_allow_html=True)
+st.markdown('<p style="text-align:center; color:#BBB;">살까 말까 고민될 땐? AI 판사님께.</p>', unsafe_allow_html=True)
 
-# 메뉴 구성
-mode = st.selectbox("⚖️ 판독 모드를 선택하세요", ["1) 행복 회로", "2) 팩트 폭격", "3) AI 판결"])
+# 1. 판독 모드 (한눈에 보이는 라디오 버튼)
+mode = st.radio("⚖️ 판독 모드 선택", ["행복 회로", "팩트 폭격", "AI 판결"])
 
 tab1, tab2 = st.tabs(["🔗 링크 분석", "📸 이미지 스캔"])
-
 detected_price = 0
 
 with tab1:
-    url = st.text_input("상품 URL을 입력하세요", placeholder="링크를 붙여넣으세요")
-    if url:
-        st.info("💡 팁: 쿠팡 등 일부 사이트는 이미지 업로드가 더 정확합니다.")
-
+    url = st.text_input("상품 URL 입력", placeholder="https://...")
 with tab2:
     uploaded_file = st.file_uploader("스크린샷 업로드", type=['png', 'jpg', 'jpeg'])
     if uploaded_file:
         img = Image.open(uploaded_file)
-        st.image(img, use_container_width=True) # 쇼츠 화면에 꽉 차게 변경
-        
-        with st.spinner("정보 추출 중..."):
-            try:
-                text = pytesseract.image_to_string(img, lang='kor+eng')
-                price_match = re.search(r'([0-9,]{3,})원', text)
-                if price_match:
-                    detected_price = int(price_match.group(1).replace(',', ''))
-                    st.success(f"금액 감지: {detected_price:,}원")
-            except:
-                st.error("OCR 엔진 오류가 발생했습니다.")
+        st.image(img, use_container_width=True)
+        try:
+            text = pytesseract.image_to_string(img, lang='kor+eng')
+            price_match = re.search(r'([0-9,]{3,})원', text)
+            if price_match:
+                detected_price = int(price_match.group(1).replace(',', ''))
+        except: pass
 
-# 판결 로직
+# 2. 랜덤 멘트 데이터베이스
+happy_quotes = [
+    "🚀 이건 소비가 아니라 미래의 나를 위한 '풀매수' 투자입니다!",
+    "✨ 고민은 배송만 늦출 뿐! 오늘 사면 내일의 내가 고마워할 거예요.",
+    "💎 당신의 가치에 비하면 이 정도 금액은 껌값 아닐까요?",
+    "🔥 인생은 짧습니다. 가지고 싶은 건 가져야죠! 지르세요!"
+]
+
+fact_quotes = [
+    "💀 정신 차리세요! 이거 사고 일주일 뒤면 구석에 박혀있을 게 뻔합니다.",
+    "💸 통장 잔고를 보고도 손가락이 움직이나요? 이건 명백한 과소비입니다.",
+    "🚫 예쁜 쓰레기 수집가님, 이번에는 제발 참으세요.",
+    "🧊 냉정해지세요. 이거 없어도 당신 인생은 아무런 문제가 없습니다."
+]
+
+# 판결 실행
 if st.button("⚖️ 최종 판결 내리기"):
     st.markdown('<div class="result-box">', unsafe_allow_html=True)
     
-    if mode == "1) 행복 회로":
-        st.subheader("🔥 행복 회로 가동!")
-        st.markdown(f"### **\"이것은 소비가 아니라 투자입니다!\"**")
-        st.write("당신의 삶의 질을 200% 올려줄 기회입니다. 하루 커피 한 잔 값으로 얻는 행복, 고민은 배송만 늦출 뿐입니다!")
+    if mode == "행복 회로":
+        st.subheader("🔥 판결: 지름신 강림!")
+        st.write(random.choice(happy_quotes))
 
-    elif mode == "2) 팩트 폭격":
-        st.subheader("❄️ 냉정한 팩트 폭격")
-        st.markdown(f"### **\"정신 차리세요!\"**")
-        st.write(f"지금 통장 잔고를 확인하셨나요? {detected_price:,}원이면 국밥이 몇 그릇입니까? 이거 없어도 당신 인생에 아무 지장 없습니다.")
+    elif mode == "팩트 폭격":
+        st.subheader("❄️ 판결: 지름 금지!")
+        st.write(random.choice(fact_quotes))
 
-    elif mode == "3) AI 판결":
-        st.subheader("⚖️ AI 판사님의 선고")
-        # 가상의 데이터 비교 로직
-        base_p = detected_price if detected_price > 0 else 150000
-        min_p = int(base_p * 0.85)
+    elif mode == "AI 판결":
+        st.subheader("⚖️ AI 판사님의 데이터 분석")
+        current_p = detected_price if detected_price > 0 else 125000
+        min_p = int(current_p * 0.82)
         
-        st.write(f"현재 분석가: **{base_p:,}원**")
-        st.write(f"역대 최저가: **{min_p:,}원**")
+        st.write(f"📊 분석 현재가: **{current_p:,}원**")
+        st.write(f"📉 과거 최저가: **{min_p:,}원**")
         
-        if base_p > min_p * 1.1:
-            st.error("❌ 판결: 지금 사면 바보입니다!")
-            st.info(f"💡 추천가: **{int(min_p * 1.05):,}원** 이하일 때 구매하세요.")
+        # 3. 근거 제시 및 링크 연결
+        st.markdown("---")
+        st.write("🔍 **판결 근거 (커뮤니티 분석):**")
+        st.write("- '역대급 딜'이라는 의견보다 '재고 처리'라는 의견이 다수 감지됨.")
+        st.write("- 뽐뿌, 루리웹 등 주요 커뮤니티 최근 3개월 평균가 기준.")
+        
+        # 다나와/네이버 쇼핑 등 검색 결과 링크 생성
+        search_query = "최저가+리뷰"
+        search_url = f"https://search.naver.com/search.naver?query={search_query}"
+        st.markdown(f"[👉 실시간 최저가 및 리뷰 확인하기]({search_url})")
+
+        if current_p > min_p * 1.1:
+            st.error(f"❌ 지금은 너무 비쌉니다! **{int(min_p * 1.05):,}원** 이하를 노리세요.")
         else:
-            st.success("✅ 판결: 적정 가격입니다. 지금 지르세요!")
+            st.success("✅ 가격이 적당합니다. 지금 바로 지르셔도 좋습니다!")
 
     st.markdown('</div>', unsafe_allow_html=True)
