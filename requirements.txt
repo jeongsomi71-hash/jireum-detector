@@ -3,3 +3,6 @@ requests
 beautifulsoup4
 pillow
 pytesseract
+matplotlib
+pandas
+numpy
