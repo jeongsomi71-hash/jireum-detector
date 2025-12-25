@@ -19,7 +19,15 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; background-color: #000000 !important; color: #FFFFFF !important; }
     .unified-header { background-color: #FFFFFF; color: #000000 !important; text-align: center; font-size: 1.8rem; font-weight: 800; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
     .sub-header { background-color: #FFFFFF; color: #000000 !important; text-align: center; font-size: 1.4rem; font-weight: 700; padding: 8px; border-radius: 5px; margin-bottom: 2.5rem; }
-    .history-box { background-color: #111; border: 1px solid #333; padding: 10px; border-radius: 5px; margin-bottom: 5px; cursor: pointer; }
+    
+    /* 최근 판독 이력 제목 폰트 사이즈 조절 (기존 1.5rem -> 1.2rem 수준으로 80% 축소) */
+    .history-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-top: 30px;
+        margin-bottom: 10px;
+        color: #00FF88;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -62,19 +70,16 @@ if st.button("⚖️ 최종 판결 내리기"):
     if not res_name or res_price == 0:
         st.error("❗ 정보가 부족합니다.")
     else:
-        # 가격 계산
         p_min = int(res_price * 0.82)
         p_avg = int(res_price * 0.93)
         verdict = "✅ 지름 추천" if res_price <= p_avg * 1.05 else "❌ 지름 금지"
         
-        # 결과 화면 출력
         st.markdown('---')
         st.subheader(f"⚖️ {res_name} 판결 결과")
         st.write(f"💰 입력 가격: {res_price:,}원")
         st.write(f"📉 추정 최저가: {p_min:,}원")
         st.write(f"📢 판결: {verdict}")
         
-        # 이력 추가 (최대 10개)
         new_history = {
             "name": res_name,
             "price": res_price,
@@ -86,25 +91,25 @@ if st.button("⚖️ 최종 판결 내리기"):
         if len(st.session_state.history) > 10:
             st.session_state.history.pop()
 
-# 4. 하단 초기화 버튼 (글자 크기 1.4배 적용)
+# 4. 하단 초기화 버튼 (폰트 사이즈를 기존 1.4rem의 80% 수준인 1.12rem으로 조절)
 st.markdown("<br>", unsafe_allow_html=True)
 st.components.v1.html(
     f"""
     <button onclick="window.parent.location.reload();" 
     style="
-        width: 100%; height: 60px; background-color: #444; color: white;
+        width: 100%; height: 55px; background-color: #444; color: white;
         border: none; border-radius: 5px; font-weight: bold; cursor: pointer;
-        font-size: 1.4rem; /* 1.4배 확대 */
+        font-size: 1.12rem; /* 기존 1.4rem 대비 80% 수준 */
     ">
     🔄 새로운 상품 판독하기 (완전 초기화)
     </button>
     """,
-    height=70
+    height=65
 )
 
-# 5. 최근 판독 이력 (맨 하단 배치)
+# 5. 최근 판독 이력 (제목 폰트 사이즈 반영)
 st.markdown("---")
-st.markdown("### 📜 최근 판독 이력 (최근 10개)")
+st.markdown('<p class="history-title">📜 최근 판독 이력 (최근 10개)</p>', unsafe_allow_html=True)
 for i, item in enumerate(st.session_state.history):
     with st.expander(f"{i+1}. {item['name']} ({item['price']:,}원) - {item['verdict']}"):
         st.write(f"**판독 모드:** {item['mode']}")
