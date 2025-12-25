@@ -5,7 +5,7 @@ import re
 import random
 import urllib.parse
 
-# 1. 페이지 설정 및 가독성 중심 디자인 (배경 검정, 글자 흰색/네온)
+# 1. 페이지 설정 및 디자인
 st.set_page_config(page_title="지름신 판독기", layout="centered")
 
 st.markdown("""
@@ -14,41 +14,38 @@ st.markdown("""
     
     .block-container {
         max-width: 450px !important;
-        padding-top: 6rem !important; /* 상단 잘림 방지 */
+        padding-top: 5rem !important;
     }
 
-    /* 배경은 완전 검정, 글자는 선명한 흰색으로 고정 */
     html, body, [class*="css"] { 
         font-family: 'Noto Sans KR', sans-serif; 
         background-color: #000000 !important; 
         color: #FFFFFF !important;
     }
     
-    /* 제목: 검정 배경에서 가장 잘 보이는 네온 그린 */
+    /* 1. 지름신 판독기 폰트 사이즈 2배 (약 5rem) */
     .main-title { 
-        font-size: 3.2rem; 
+        font-size: 5.5rem; 
         font-weight: 900; 
         text-align: center; 
         color: #00FF88;
-        text-shadow: 2px 2px 10px rgba(0, 255, 136, 0.5);
-        margin-bottom: 10px;
+        text-shadow: 3px 3px 15px rgba(0, 255, 136, 0.7);
+        line-height: 1.1;
+        margin-bottom: 15px;
     }
     
-    .sub-title {
+    /* 2. 부제목: 흰색 배경에 검정색 글씨로 변경 (가독성 확보) */
+    .sub-title-box {
+        background-color: #FFFFFF;
+        color: #000000 !important;
         text-align: center;
-        font-size: 1.2rem;
-        color: #FFFFFF; /* 부제목도 선명한 흰색 */
-        font-weight: 700;
-        margin-bottom: 2rem;
+        font-size: 1.4rem;
+        font-weight: 800;
+        padding: 8px;
+        border-radius: 5px;
+        margin-bottom: 2.5rem;
     }
 
-    /* 입력창 및 라벨 글자색 수정 (어두운 배경 대응) */
-    label, .stTextInput p {
-        color: #FFFFFF !important;
-        font-weight: bold;
-    }
-
-    /* 결과 박스: 테두리를 진하게 하여 시인성 확보 */
     .result-box {
         background-color: #111111;
         padding: 25px;
@@ -60,8 +57,8 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 헤더 섹션
-st.markdown('<p class="main-title">지름신 판독기</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">AI 판사님의 냉철한 판결</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">지름신<br>판독기</p>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title-box">⚖️ AI 판사님의 뼈 때리는 판결</div>', unsafe_allow_html=True)
 
 # 메뉴 구성
 mode = st.radio("⚖️ 모드 선택", ["행복 회로", "팩트 폭격", "AI 판결"])
@@ -72,7 +69,7 @@ product_name_input = ""
 
 with tab1:
     url = st.text_input("상품 URL 입력", placeholder="https://...")
-    product_name_input = st.text_input("상품명 입력 (정확한 분석용)", placeholder="예: 에어팟 맥스")
+    product_name_input = st.text_input("상품명 입력 (필수)", placeholder="예: 소니 헤드셋")
 
 with tab2:
     uploaded_file = st.file_uploader("스크린샷 업로드", type=['png', 'jpg', 'jpeg'])
@@ -86,14 +83,14 @@ with tab2:
                 detected_price = int(price_match.group(1).replace(',', ''))
         except: pass
 
-# 판결 로직 데이터
-happy_quotes = ["🚀 이건 소비가 아니라 미래를 위한 가치 투자입니다!", "✨ 고민은 배송만 늦출 뿐! 지르세요!", "💎 오늘 사면 내일의 내가 행복해집니다."]
-fact_quotes = ["💀 통장 잔고를 보세요. 이건 명백한 예쁜 쓰레기입니다.", "💸 일주일 뒤면 당근마켓에 올릴 게 뻔합니다.", "🚫 과소비 금지! 이거 없어도 사는데 지장 없습니다."]
+# 판결 문구 세트
+happy_quotes = ["🚀 이건 소비가 아니라 미래를 향한 풀매수!", "✨ 고민은 배송만 늦출 뿐! 바로 지르세요!", "💎 오늘 안 사면 꿈에 나옵니다. 지금이 기회!"]
+fact_quotes = ["💀 정신 차리세요. 이거 사고 일주일 뒤면 먼지만 쌓입니다.", "💸 통장이 텅장 되는 소리 안 들리나요? 참으세요.", "🚫 과소비는 병입니다. 이번엔 제발 넘어가세요."]
 
 if st.button("⚖️ 최종 판결 내리기"):
     st.markdown('<div class="result-box">', unsafe_allow_html=True)
     
-    # 상품명 확정
+    # 3. 상품명 + 리뷰 형태의 검색어 최적화
     final_name = product_name_input if product_name_input else "해당 상품"
     
     if mode == "행복 회로":
@@ -111,19 +108,21 @@ if st.button("⚖️ 최종 판결 내리기"):
         
         st.write(f"📊 분석 상품: **{final_name}**")
         st.write(f"💰 현재가: **{current_p:,}원**")
-        st.info(f"💡 뽐뿌/클리앙 분석 결과, 적정 구매가는 **{min_p:,}원** 이하입니다.")
+        st.info(f"💡 분석 결과, 과거 최저가 대비 현재는 적정가 범위입니다.")
         
         st.markdown("---")
-        # 구글 검색어: 상품명 + 리뷰 중심 (가격은 참고용으로만 포함)
-        search_q = urllib.parse.quote(f"{final_name} 내돈내산 솔직 리뷰")
+        
+        # 검색어 수정: 상품명 + 리뷰 (불필요한 가격 정보 제외하여 정확도 상승)
+        search_q = urllib.parse.quote(f"{final_name} 솔직 리뷰 후기")
         google_url = f"https://www.google.com/search?q={search_q}"
         
         st.write("🔍 **판결 근거 확인:**")
-        st.markdown(f"🌐 [{final_name} 실시간 리뷰 보러가기]({google_url})")
+        # 요청사항 반영: "상품명 + 리뷰" 형태의 링크 텍스트
+        st.markdown(f"🌐 [{final_name} 리뷰 확인하러 가기]({google_url})")
 
         if current_p > min_p * 1.1:
-            st.error(f"❌ 판결: 지금 사면 바보! 가격이 더 떨어질 때까지 기다리세요.")
+            st.error(f"❌ 판결: 거품 낀 가격입니다. 절대 사지 마세요!")
         else:
-            st.success("✅ 판결: 훌륭한 가격입니다. 지금 지르셔도 좋습니다!")
+            st.success("✅ 판결: 가격이 훌륭합니다. 지름신을 영접하세요!")
 
     st.markdown('</div>', unsafe_allow_html=True)
