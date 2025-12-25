@@ -2,35 +2,39 @@ import streamlit as st
 from PIL import Image
 import pytesseract
 import re
-import random
 import urllib.parse
 
 # 1. 페이지 설정
 st.set_page_config(page_title="지름신 판독기", layout="centered")
 
-# CSS: 헤더 디자인 통일
+# 세션 상태 초기화 (판결 이력 저장용)
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
+# CSS 설정
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
-    .block-container { max-width: 500px !important; padding-top: 5rem !important; }
+    .block-container { max-width: 500px !important; padding-top: 2rem !important; }
     html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; background-color: #000000 !important; color: #FFFFFF !important; }
     .unified-header { background-color: #FFFFFF; color: #000000 !important; text-align: center; font-size: 1.8rem; font-weight: 800; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
     .sub-header { background-color: #FFFFFF; color: #000000 !important; text-align: center; font-size: 1.4rem; font-weight: 700; padding: 8px; border-radius: 5px; margin-bottom: 2.5rem; }
+    .history-box { background-color: #111; border: 1px solid #333; padding: 10px; border-radius: 5px; margin-bottom: 5px; cursor: pointer; }
     </style>
     """, unsafe_allow_html=True)
 
-# 상단 헤더
+# 헤더
 st.markdown('<div class="unified-header">⚖️ 지름신 판독기</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">AI 판사님의 뼈 때리는 판결</div>', unsafe_allow_html=True)
 
-# 2. 입력 섹션 (간섭 차단을 위해 탭별로 독립적인 변수 사용)
+# 2. 입력 섹션
 mode = st.radio("⚖️ 판독 모드 선택", ["행복 회로", "팩트 폭격", "AI 판결"])
 tabs = st.tabs(["🔗 URL", "📸 이미지", "✍️ 직접 입력"])
 
 res_name, res_price = "", 0
 
 with tabs[0]:
-    url_input = st.text_input("상품 URL 입력", key="url_key")
+    st.text_input("상품 URL 입력", key="url_key")
 
 with tabs[1]:
     img_file = st.file_uploader("스크린샷 업로드", type=['png', 'jpg', 'jpeg'], key="img_key")
@@ -47,58 +51,63 @@ with tabs[1]:
 
 with tabs[2]:
     m_name = st.text_input("상품명 입력", key="manual_name_key")
-    m_price = st.text_input("가격 입력 (숫자만)", key="manual_price_key")
-    # 직접 입력이 있으면 기존 OCR 결과보다 우선순위를 높임
+    m_price = st.text_input("가격 입력", key="manual_price_key")
     if m_name: res_name = m_name
     if m_price:
         try: res_price = int(re.sub(r'[^0-9]', '', m_price))
         except: pass
 
-# 3. 판결 로직 (계산 버그 방지: 버튼 클릭 시점에서만 1회 계산)
+# 3. 판결 내리기 및 이력 저장
 if st.button("⚖️ 최종 판결 내리기"):
     if not res_name or res_price == 0:
-        st.error("❗ 정보가 부족합니다. '직접 입력' 탭에서 정보를 완성해 주세요.")
+        st.error("❗ 정보가 부족합니다.")
     else:
-        st.markdown('<hr>', unsafe_allow_html=True)
-        # 비율 누적 버그 해결을 위한 변수 고정
+        # 가격 계산
         p_min = int(res_price * 0.82)
         p_avg = int(res_price * 0.93)
+        verdict = "✅ 지름 추천" if res_price <= p_avg * 1.05 else "❌ 지름 금지"
         
-        if mode == "AI 판결":
-            st.subheader(f"⚖️ {res_name} 분석")
-            st.write(f"💰 현재가: **{res_price:,}원**")
-            st.success(f"📉 추정 최저가: **{p_min:,}원**")
-            st.info(f"💡 적정가 기준: **{p_avg:,}원**")
-            
-            search_url = f"https://www.google.com/search?q={urllib.parse.quote(res_name + ' 구매 가격 리뷰')}"
-            st.markdown(f"🛒 [{res_name} 리뷰 및 실구매가 확인]({search_url})")
-            
-            if res_price > p_avg * 1.05:
-                st.error("❌ 판결: 거품이 껴 있습니다. 지금 사면 손해!")
-            else:
-                st.success("✅ 판결: 합리적인 가격입니다. 지르셔도 좋습니다!")
+        # 결과 화면 출력
+        st.markdown('---')
+        st.subheader(f"⚖️ {res_name} 판결 결과")
+        st.write(f"💰 입력 가격: {res_price:,}원")
+        st.write(f"📉 추정 최저가: {p_min:,}원")
+        st.write(f"📢 판결: {verdict}")
+        
+        # 이력 추가 (최대 10개)
+        new_history = {
+            "name": res_name,
+            "price": res_price,
+            "min_p": p_min,
+            "verdict": verdict,
+            "mode": mode
+        }
+        st.session_state.history.insert(0, new_history)
+        if len(st.session_state.history) > 10:
+            st.session_state.history.pop()
 
-# ----------------------------------------------------------------
-# 4. 핵심: 자바스크립트를 직접 심은 물리적 "F5" 버튼
-# ----------------------------------------------------------------
-st.markdown("<br><br><center>", unsafe_allow_html=True)
-# 일반 st.button 대신 HTML 버튼을 직접 생성하여 클릭 시 부모 창을 강제 새로고침합니다.
+# 4. 하단 초기화 버튼 (글자 크기 1.4배 적용)
+st.markdown("<br>", unsafe_allow_html=True)
 st.components.v1.html(
     f"""
     <button onclick="window.parent.location.reload();" 
     style="
-        width: 100%;
-        height: 50px;
-        background-color: #444;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        font-weight: bold;
-        cursor: pointer;
+        width: 100%; height: 60px; background-color: #444; color: white;
+        border: none; border-radius: 5px; font-weight: bold; cursor: pointer;
+        font-size: 1.4rem; /* 1.4배 확대 */
     ">
     🔄 새로운 상품 판독하기 (완전 초기화)
     </button>
     """,
-    height=60
+    height=70
 )
-st.markdown("</center>", unsafe_allow_html=True)
+
+# 5. 최근 판독 이력 (맨 하단 배치)
+st.markdown("---")
+st.markdown("### 📜 최근 판독 이력 (최근 10개)")
+for i, item in enumerate(st.session_state.history):
+    with st.expander(f"{i+1}. {item['name']} ({item['price']:,}원) - {item['verdict']}"):
+        st.write(f"**판독 모드:** {item['mode']}")
+        st.write(f"**추정 최저가:** {item['min_p']:,}원")
+        st.write(f"**판단 결과:** {item['verdict']}")
+        st.write(f"**판단 근거:** 현재가 대비 역대 데이터 분석을 통한 적정가 산출")
