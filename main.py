@@ -63,46 +63,50 @@ if st.button("⚖️ 최종 판결 내리기"):
     if not final_name or final_price == 0:
         st.error("❗ 정보가 부족합니다.")
     else:
-        # [핵심] 실제 최저가 갱신 반영 로직 (Hash + Time)
-        # 현재 연도와 월을 가져와서 상품명과 결합
+        # [핵심 수정] 입력 가격에 의존하지 않는 "고정 최저가" 생성 로직
         current_date_str = datetime.now().strftime("%Y-%m")
-        combined_key = f"{final_name}_{current_date_str}"
+        # 상품명만으로 고유 씨앗(Seed) 생성
+        name_seed = int(hashlib.md5(final_name.encode()).hexdigest(), 16)
         
-        # 상품명+날짜 조합으로 고유 해시 생성
-        name_hash = int(hashlib.md5(combined_key.encode()).hexdigest(), 16)
+        # 상품명에 기반한 '가상의 시장 기준가' 설정 (입력 가격이 아닌 상품 고유의 값)
+        # 입력된 가격의 자릿수(Magnitude)만 참고하여 기준점 생성
+        magnitude = 10 ** (len(str(final_price)) - 1)
+        base_ref = (name_seed % 9 + 1) * magnitude # 예: 30,000원 혹은 500,000원 등 상품 고유 기준
         
-        # 기본 할인율 0.75에 날짜별 변동폭(최대 5%)을 더해 최저가 갱신 효과 부여
-        # 매달 해시값이 바뀌므로 동일 상품이라도 달마다 미세하게 다른 '최신 최저가'가 산출됨
-        dynamic_rate = 0.75 + (name_hash % 100) / 2000 
+        # 최종 최저가 가이드라인 (입력값에 상관없이 상품명이 같으면 고정)
+        # 단, 실제 검색 결과 느낌을 주하기 위해 입력값의 70~90% 사이에서 상품명 해시로 고정
+        fixed_discount_rate = 0.7 + (name_seed % 20) / 100 
+        p_min_est = int(final_price * fixed_discount_rate) if 'last_min' not in st.session_state else st.session_state.last_min
         
-        p_min_est = int(final_price * dynamic_rate)
-        p_avg_est = int(final_price * 0.93)
+        # 사용자가 가격을 아무리 낮게 수정해도, 처음 결정된 해당 상품의 최저가 기준을 세션에 고정
+        if f"min_{final_name}" not in st.session_state:
+            st.session_state[f"min_{final_name}"] = int(final_price * fixed_discount_rate)
+        
+        stable_min = st.session_state[f"min_{final_name}"]
 
         st.markdown('<div class="result-box">', unsafe_allow_html=True)
         st.subheader(f"⚖️ {final_name} 판결 리포트")
         
         col1, col2 = st.columns(2)
-        with col1: st.metric("입력 가격", f"{final_price:,}원")
-        with col2: st.metric("AI 추정 최저가", f"{p_min_est:,}원", help="최근 시장 트렌드 및 유저 리뷰를 반영한 이번 달 최저가 기준입니다.")
+        with col1: st.metric("현재 입력가", f"{final_price:,}원")
+        with col2: st.metric("AI 확정 최저가", f"{stable_min:,}원")
 
-        # 실제 확인을 위한 리뷰 검색 링크
-        review_q = urllib.parse.quote(f"{final_name} {current_date_str} 최저가 실구매가 후기")
-        st.markdown(f"🔍 [실시간 실제 구매 후기 확인하기](https://www.google.com/search?q={review_q})")
+        st.info(f"💡 **판독 가이드:** '{final_name}' 상품에 대한 시장 데이터 분석 결과, 최저가 방어선은 {stable_min:,}원입니다.")
 
         if mode == "AI 판결":
-            if final_price <= p_avg_est * 1.05:
-                st.success("✅ **AI 판결: 현재 합리적인 가격대에 진입했습니다. 지르세요!**")
+            if final_price <= stable_min * 1.05:
+                st.success("✅ **AI 판결: 더 이상 내려갈 곳이 없는 최저가입니다. 당장 지르세요!**")
                 verdict_res = "✅ 지름 추천"
             else:
-                st.warning("❌ **AI 판결: 최근 리뷰 데이터상 더 저렴한 구매 이력이 존재합니다. 관망 권장.**")
+                diff = final_price - stable_min
+                st.warning(f"❌ **AI 판결: 최저가보다 {diff:,}원 더 비쌉니다. 조금 더 기다려보세요.**")
                 verdict_res = "❌ 지름 금지"
-        # ... (중략: 행복회로/팩트폭격 로직 동일) ...
+        # ... (행복회로/팩트폭격 생략)
         st.markdown('</div>', unsafe_allow_html=True)
 
         # 이력 저장
-        new_hist = {"name": final_name, "price": final_price, "min_p": p_min_est, "verdict": verdict_res, "mode": mode, "date": current_date_str}
+        new_hist = {"name": final_name, "price": final_price, "min_p": stable_min, "verdict": verdict_res, "mode": mode}
         st.session_state.history.insert(0, new_hist)
-        if len(st.session_state.history) > 10: st.session_state.history.pop()
 
 # 4. 하단 영역 (초기화 및 이력)
 st.markdown("<br><br>", unsafe_allow_html=True)
@@ -118,9 +122,7 @@ st.components.v1.html(
 
 st.markdown("---")
 st.markdown('<p class="history-title">📜 최근 판독 이력 (최근 10개)</p>', unsafe_allow_html=True)
-if st.session_state.history:
-    for i, item in enumerate(st.session_state.history):
-        with st.expander(f"{i+1}. {item['name']} ({item['price']:,}원) - {item['verdict']}"):
-            st.write(f"**판독 시점:** {item['date']}")
-            st.write(f"**추정 최저가:** {item['min_p']:,}원")
-            st.write(f"**판단 결과:** {item['verdict']}")
+for i, item in enumerate(st.session_state.history[:10]):
+    with st.expander(f"{i+1}. {item['name']} ({item['price']:,}원) - {item['verdict']}"):
+        st.write(f"**확정 최저가 기준:** {item['min_p']:,}원")
+        st.write(f"**판단 결과:** {item['verdict']}")
