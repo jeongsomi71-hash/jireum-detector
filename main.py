@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 및 핵심 키워드 추출 엔진
+# 1. 시세 분석 및 정보 필터링 엔진
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -15,13 +15,25 @@ class AdvancedSearchEngine:
         return {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
 
     @staticmethod
+    def sanitize_text(text):
+        """작성자 ID, 닉네임, 이메일 등 민감 정보 제거 (v3.4 신규)"""
+        # 1. 이메일 형식 제거
+        text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', text)
+        # 2. 아이디로 추정되는 패턴 제거 (예: ID: gildong123, 닉네임: 홍길동 등)
+        text = re.sub(r'(ID|id|아이디|닉네임|작성자|글쓴이)\s*[:：]\s*\S+', '', text)
+        # 3. 연속된 영문+숫자 (아이디 패턴) 6자리 이상 제거 (선별적 적용)
+        text = re.sub(r'\b[a-z0-9]{8,}\b', '', text)
+        return text.strip()
+
+    @staticmethod
     def extract_core_keyword(full_title):
-        """상품명에서 불필요한 수식어를 제거하고 핵심만 추출 (v3.3 신규)"""
-        # 특수문자 및 불필요한 단어 제거
-        clean_name = re.sub(r'\[.*?\]|\(.*?\)|\!|\?|\★|\☆', '', full_title)
+        """핵심 키워드 추출 및 민감 정보 정제"""
+        clean_name = AdvancedSearchEngine.sanitize_text(full_title)
+        # 특수문자 및 불필요한 수식어 제거
+        clean_name = re.sub(r'\[.*?\]|\(.*?\)|\!|\?|\★|\☆', '', clean_name)
         # 가격 정보나 날짜 정보 제거
         clean_name = re.sub(r'[0-9,]{4,}원|[0-9]{1,2}\/[0-9]{1,2}', '', clean_name)
-        # 핵심 키워드만 남기기 위해 앞뒤 공백 정리 및 단어 수 제한 (최대 6단어)
+        
         words = clean_name.split()
         return " ".join(words[:6]) if len(words) > 6 else " ".join(words)
 
@@ -93,7 +105,9 @@ class AdvancedSearchEngine:
             elif "울트라" in t_low or "ultra" in t_low: spec_tag += " Ultra"
 
             if spec_tag not in categorized: categorized[spec_tag] = []
-            categorized[spec_tag].append((num, text))
+            # 저장 시점에 텍스트에서 민감 정보 제거
+            safe_text = AdvancedSearchEngine.sanitize_text(text)
+            categorized[spec_tag].append((num, safe_text))
         
         cleaned = {k: AdvancedSearchEngine.clean_prices_robust(v) for k, v in categorized.items()}
         if "10인용" in cleaned and "6인용" in cleaned:
@@ -105,7 +119,7 @@ class AdvancedSearchEngine:
 # 2. UI 및 로직 통합
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v3.3", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v3.4", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -128,7 +142,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.3</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.4</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.s_name)
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.s_price)
@@ -139,7 +153,7 @@ def main():
         if st.button("🔍 시세 판독 실행"):
             if in_name:
                 st.session_state.s_name, st.session_state.s_price = in_name, in_price
-                with st.spinner('🏘️ 키워드 추출 및 시세 분석 중...'):
+                with st.spinner('🏘️ 보안 필터링 및 시세 분석 중...'):
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_name, in_exclude)
                     data = {"name": in_name, "user_price": in_price, "results": res, "summary": AdvancedSearchEngine.summarize_sentiment(raw), "time": datetime.now().strftime('%H:%M')}
@@ -161,6 +175,7 @@ def main():
         else:
             for opt_key, items in sorted(d['results'].items(), reverse=True):
                 min_p, best_title = items[0]
+                # 핵심 키워드 추출 시에도 민감 정보 재확인
                 core_title = AdvancedSearchEngine.extract_core_keyword(best_title)
                 count = len(items)
                 rel_col = "#00FF88" if count >= 4 else "#FF5555"
@@ -170,7 +185,7 @@ def main():
                     <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {("보통" if count>=4 else "낮음")} (표본 {count}건)</span><br>
                     <span class="core-title">{core_title}</span>
                     <span class="price-highlight">{min_p:,}원</span>
-                    <span class="full-title-meta">옵션: {opt_key} | 원본: {best_title[:50]}...</span>
+                    <span class="full-title-meta">옵션: {opt_key} | 데이터: {best_title[:45]}...</span>
                 </div>
                 ''', unsafe_allow_html=True)
                 
@@ -203,4 +218,4 @@ def main():
                 st.rerun()
 
 if __name__ == "__main__": main()
-# Version: v3.3 - Updated: Core keyword extraction & UI Cleanup (Removed 'Price' from buttons).
+# Version: v3.4 - Privacy Enhancement: Sanitize IDs, Emails and Nicknames from titles.
