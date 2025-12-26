@@ -6,7 +6,7 @@ import urllib.parse
 from datetime import datetime
 
 # ==========================================
-# 1. 시세 분석 엔진 (구조적 필터링 적용)
+# 1. 시세 분석 엔진 (기능 유지 및 구조적 필터링)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -26,31 +26,22 @@ class AdvancedSearchEngine:
                 res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
                 soup = BeautifulSoup(res.text, 'html.parser')
                 
-                # [수집 범위 복구]
                 if name == "뽐뿌":
-                    # 뽐뿌는 .title 안에 닉네임이 섞여 있으므로 자식 태그를 제거하는 방식 사용
                     items = soup.select('.title')
                     for item in items:
-                        # 닉네임이나 기타 정보가 담긴 span/em 태그 제거 (구조적 제거)
+                        # 닉네임 제거 (v4.1 성공 로직 유지)
                         for extra in item.find_all(['span', 'em']):
                             extra.decompose() 
                         
                         raw_text = item.get_text(strip=True)
                         if not raw_text: continue
                         
-                        # 댓글 수 추출 [00]
+                        # [요청 반영] 마지막 숫자를 댓글 수로 활용
                         comment_match = re.search(r'\[(\d+)\]$', raw_text)
                         comment_count = int(comment_match.group(1)) if comment_match else 0
                         pure_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
                         
-                        # 일자 정보 가져오기
-                        date_text = datetime.now().strftime('%y/%m/%d')
-                        info_row = item.find_next('span', class_='hi')
-                        if info_row:
-                            d_match = re.search(r'\d{2}/\d{2}/\d{2}', info_row.get_text())
-                            if d_match: date_text = d_match.group(0)
-                        
-                        all_data.append({"title": pure_title, "comments": comment_count, "date": date_text})
+                        all_data.append({"title": pure_title, "comments": comment_count})
                 
                 else: # 클리앙
                     items = soup.select('.list_subject .subject_fixed')
@@ -59,7 +50,7 @@ class AdvancedSearchEngine:
                         comment_match = re.search(r'\[(\d+)\]$', raw_text)
                         comment_count = int(comment_match.group(1)) if comment_match else 0
                         pure_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
-                        all_data.append({"title": pure_title, "comments": comment_count, "date": "클리앙"})
+                        all_data.append({"title": pure_title, "comments": comment_count})
             except: continue
         return all_data
 
@@ -100,7 +91,7 @@ class AdvancedSearchEngine:
 
             if spec_tag not in categorized: categorized[spec_tag] = []
             categorized[spec_tag].append({
-                "price": num, "title": text, "comments": item['comments'], "date": item['date']
+                "price": num, "title": text, "comments": item['comments'], "tag": spec_tag
             })
         return {k: v for k, v in categorized.items() if v}
 
@@ -108,7 +99,7 @@ class AdvancedSearchEngine:
 # 2. UI 및 메인 로직
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v4.1", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v4.2", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -121,6 +112,7 @@ def apply_style():
         .badge { background: #333; padding: 2px 8px; border-radius: 4px; color: #00FF88; font-weight: bold; }
         .judgment-box { padding: 10px; border-radius: 8px; font-weight: 900; text-align: center; margin-top: 10px; font-size: 1.1rem; }
         .stButton>button { width: 100%; border: 2px solid #00FF88 !important; background-color: #000000 !important; color: #00FF88 !important; font-weight: bold !important; height: 3.5rem; }
+        .link-btn { background-color: #1A1A1A !important; color: #00FF88 !important; padding: 10px; border-radius: 5px; text-align: center; font-size: 0.9rem; border: 1px solid #00FF88; text-decoration: none; display: block; margin-bottom: 5px; font-weight: bold; }
         .version-footer { text-align: center; color: #444444; font-size: 0.8rem; margin-top: 50px; font-weight: bold; }
         </style>
         """, unsafe_allow_html=True)
@@ -132,7 +124,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v4.1</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v4.2</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.s_name)
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.s_price)
@@ -140,10 +132,11 @@ def main():
 
     c1, c2 = st.columns([3, 1])
     with c1:
+        # [요청 반영] 판독 중 문구 고정
         if st.button("🔍 시세 판독 실행"):
             if in_name:
                 st.session_state.s_name, st.session_state.s_price = in_name, in_price
-                with st.spinner('🏘️ 닉네임 제거 및 데이터 복구 중...'):
+                with st.spinner('최저가 추정중...'):
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_exclude)
                     summ = AdvancedSearchEngine.summarize_sentiment(raw)
@@ -165,21 +158,19 @@ def main():
             best = items[0]
             avg_c = sum(i['comments'] for i in items) / len(items)
             
-            # [신뢰도 등급 로직]
             score = len(items) * 1.5 + avg_c
             if score >= 10: rel_txt, rel_col = "높음", "#00FF88"
             elif score >= 5: rel_txt, rel_col = "보통", "#FFD700"
             else: rel_txt, rel_col = "낮음", "#FF5555"
 
+            # [요청 반영] 일자와 일반(태그) 정보 제거, 댓글 수만 표시
             st.markdown(f'''
             <div class="detail-card">
                 <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {rel_txt} (점수: {score:.1f})</span><br>
                 <span class="price-highlight">{best['price']:,}원</span>
                 <span class="core-title">{best['title']}</span>
                 <div class="meta-info">
-                    <span>📅 {best['date']}</span>
                     <span>💬 댓글 <span class="badge">{best['comments']}</span></span>
-                    <span>🏷️ {opt_key}</span>
                 </div>
             </div>
             ''', unsafe_allow_html=True)
@@ -188,6 +179,12 @@ def main():
                 diff = int(d['user_price']) - best['price']
                 if diff <= 0: st.markdown('<div class="judgment-box" style="background:#004d40; color:#00FF88;">✅ 즉시 지르세요!</div>', unsafe_allow_html=True)
                 else: st.markdown(f'<div class="judgment-box" style="background:#4d0000; color:#FF5555;">❌ 차액 {diff:,}원 발생</div>', unsafe_allow_html=True)
+
+        # [요청 반영] 누락된 커뮤니티 링크 복구
+        eq = urllib.parse.quote(d['name'])
+        cl1, cl2 = st.columns(2)
+        cl1.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={eq}&category=1" class="link-btn" target="_blank">뽐뿌 바로가기</a>', unsafe_allow_html=True)
+        cl2.markdown(f'<a href="https://www.clien.net/service/search?q={eq}" class="link-btn" target="_blank">클리앙 바로가기</a>', unsafe_allow_html=True)
 
     if st.session_state.history:
         st.write("---")
@@ -198,6 +195,6 @@ def main():
                 st.session_state.s_name, st.session_state.s_price = h['name'], h['user_price']
                 st.rerun()
 
-    st.markdown('<div class="version-footer">Version: v4.1 - Tag Decompose Fix & Search Restored</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-footer">Version: v4.2 - Link Restored & Meta Info Cleaned</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
