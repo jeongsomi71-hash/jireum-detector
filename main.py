@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -8,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 엔진 (강력한 수집 엔진 유지 + 필터링 강화)
+# 1. 시세 분석 엔진 (강력 수집 유지 + 키워드 정제 강화)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -16,12 +15,23 @@ class AdvancedSearchEngine:
         return {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
 
     @staticmethod
-    def clean_nickname_and_meta(text):
-        """닉네임 및 기타 메타정보를 확실하게 제거 (v3.8 교정)"""
-        # 닉네임이 제목 뒤에 붙는 패턴 차단 (공백/하이픈/슬래시 뒤의 단어들 정리)
-        # 보통 뽐뿌/클리앙 리스트에서 닉네임은 별도 태그에 있으나, 텍스트가 섞일 경우 대비
-        clean_text = re.split(r'\s{2,}|/| - ', text)[0] 
-        return clean_text.strip()
+    def extract_pure_product_name(text):
+        """닉네임 및 수식어를 제거하고 상품의 핵심 특징만 추출 (v3.9 핵심 로직)"""
+        # 1. 닉네임/게시판 정보가 섞인 뒷부분 과감히 절단 (공백 2칸 이상 혹은 특수구분자)
+        clean_text = re.split(r'\s{2,}|/| - |\|', text)[0]
+        
+        # 2. 대괄호, 중괄호 등 수식어 제거
+        clean_text = re.sub(r'\[.*?\]|\(.*?\)|\{.*?\}', '', clean_text)
+        
+        # 3. 특수문자 및 감탄사 제거
+        clean_text = re.sub(r'[\!\?\★\☆\■\●\▼\▲\▶]', '', clean_text)
+        
+        # 4. 가격 정보(숫자+원/만)가 제목에 포함된 경우 제거
+        clean_text = re.sub(r'\d+[원만]', '', clean_text)
+        
+        # 5. 너무 긴 경우 핵심 단어 6~7개만 유지 (닉네임 침범 방지)
+        words = clean_text.split()
+        return " ".join(words[:7]).strip()
 
     @staticmethod
     def search_all(product_name):
@@ -35,22 +45,20 @@ class AdvancedSearchEngine:
             try:
                 res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
                 soup = BeautifulSoup(res.text, 'html.parser')
-                # 기존의 광범위한 수집 범위 (title, content 모두 포함) 절대 유지
+                # 광범위 수집 엔진 유지
                 items = soup.select('.title, .content') if name == "뽐뿌" else soup.select('.list_subject .subject_fixed, .subject_fixed')
                 
                 for item in items:
                     raw_text = item.get_text(strip=True)
                     if not raw_text: continue
                     
-                    # 댓글 수 분리
                     comment_match = re.search(r'\[(\d+)\]$', raw_text)
                     comment_count = int(comment_match.group(1)) if comment_match else 0
                     
-                    # 제목에서 댓글수 제거 및 [닉네임 제거 적용]
-                    title_only = re.sub(r'\[\d+\]$', '', raw_text).strip()
-                    pure_title = AdvancedSearchEngine.clean_nickname_and_meta(title_only)
+                    # 제목 정제 (핵심 키워드 방식)
+                    raw_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
+                    pure_title = AdvancedSearchEngine.extract_pure_product_name(raw_title)
                     
-                    # 일자 추출
                     date_text = datetime.now().strftime('%y/%m/%d')
                     if name == "뽐뿌":
                         info = item.find_next('span', class_='hi')
@@ -108,7 +116,7 @@ class AdvancedSearchEngine:
 # 2. UI 및 로직 통합
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v3.8", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v3.9", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -133,7 +141,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.8</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.9</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.s_name)
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.s_price)
@@ -144,7 +152,7 @@ def main():
         if st.button("🔍 시세 판독 실행"):
             if in_name:
                 st.session_state.s_name, st.session_state.s_price = in_name, in_price
-                with st.spinner('🏘️ 정밀 분석 중...'):
+                with st.spinner('🏘️ 정밀 키워드 분석 중...'):
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_exclude)
                     summ = AdvancedSearchEngine.summarize_sentiment(raw)
@@ -165,8 +173,6 @@ def main():
             items = sorted(items, key=lambda x: x['price'])
             best = items[0]
             avg_c = sum(i['comments'] for i in items) / len(items)
-            
-            # [신뢰도 로직 교정] 점수가 낮으면 확실하게 '낮음' 표시
             score = len(items) * 1.5 + avg_c
             if score >= 12: rel_txt, rel_col = "높음", "#00FF88"
             elif score >= 7: rel_txt, rel_col = "보통", "#FFD700"
@@ -176,7 +182,7 @@ def main():
             <div class="detail-card">
                 <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {rel_txt} (관심도: {score:.1f})</span><br>
                 <span class="price-highlight">{best['price']:,}원</span>
-                <span class="core-title">{best['title'][:50]}</span>
+                <span class="core-title">{best['title']}</span>
                 <div class="meta-info">
                     <span>📅 {best['date']}</span>
                     <span>💬 댓글 <span class="badge">{best['comments']}</span></span>
@@ -204,6 +210,6 @@ def main():
                 st.session_state.s_name, st.session_state.s_price = h['name'], h['user_price']
                 st.rerun()
 
-    st.markdown('<div class="version-footer">Version: v3.8 - Accuracy Fix & Full Engine Maintained</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-footer">Version: v3.9 - Core Keyword Logic & Full Engine Maintained</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
