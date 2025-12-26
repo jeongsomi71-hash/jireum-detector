@@ -7,31 +7,31 @@ from PIL import Image, ImageOps, ImageFilter
 import pytesseract
 
 # ==========================================
-# 1. 슈퍼 와이드 2단계 탐색 엔진
+# 1. 시세 추적 엔진 (강제 쿼리 & 와이드 스캔)
 # ==========================================
 class CommunityHotDealEngine:
     @staticmethod
     def fetch_from_google(query, headers):
-        """태그에 구애받지 않고 모든 텍스트에서 가격 흔적을 찾는 로직"""
+        """구글 검색 결과의 모든 텍스트 노드에서 가격 데이터 추출"""
         url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
         try:
-            # 타임아웃을 늘려 구글의 응답을 충분히 기다립니다.
+            # 타임아웃 연장 및 모바일 에이전트 활용으로 차단 회피
             response = requests.get(url, headers=headers, timeout=10)
             if response.status_code == 429: return "BOT_DETECTED"
             if response.status_code != 200: return None
             
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # 불필요한 태그 제거 후 순수 텍스트만 추출 (가장 강력한 수집 방식)
-            for script_or_style in soup(["script", "style", "header", "footer", "nav"]):
-                script_or_style.extract()
+            # 텍스트 추출 전 불필요한 태그 제거 (데이터 노이즈 제거)
+            for s in soup(["script", "style", "iframe", "head", "nav", "footer"]):
+                s.extract()
             
-            all_content = soup.get_text(separator=' ') 
+            all_content = soup.get_text(separator=' ')
             
-            # 정교한 가격 추출 패턴 (연도 제외, 만/원 단위 및 콤마 대응)
+            # 정교한 가격 패턴 매칭 (연도 제외, 콤마/단위 대응)
             price_list = []
-            # 패턴 설명: 연도(202X)가 아닌 4~10자리의 숫자와 그 뒤의 단위(원/만)를 포착
-            pattern = re.compile(r'(?<!\d)(?!202[456])([0-9,]{4,10})\s?(원|만)?')
+            # 202X 연도를 피하면서 4~10자리 숫자와 단위(원/만)를 포착
+            pattern = re.compile(r'(?<!\d)(?!202[456])([0-9,]{4,10})\s?(원|만)')
             found = pattern.findall(all_content)
             
             for f_val, unit in found:
@@ -39,7 +39,7 @@ class CommunityHotDealEngine:
                 if not num_str: continue
                 val = int(num_str)
                 
-                # '만' 단위 보정 (예: 85만 -> 850,000)
+                # '만' 단위 보정
                 if unit == '만': val *= 10000
                 
                 # 현실적인 가격대 필터 (1만원 ~ 2,000만원)
@@ -52,18 +52,20 @@ class CommunityHotDealEngine:
 
     @staticmethod
     def get_realtime_price(product_name):
+        # 차단 확률이 낮은 모바일 사파리 헤더 활용
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Accept-Language": "ko-KR,ko;q=0.9"
         }
         
-        # 쉼표 기반 키워드 정제
+        # 상품명 키워드화 및 가격 유도 키워드 추가
         keywords = product_name.replace(" ", ", ")
-        communities = ["뽐뿌", "루리웹", "클리앙"]
+        communities = "(뽐뿌 OR 루리웹 OR 클리앙)"
 
-        # --- [1단계] 쉼표 기반 AND 정밀 탐색 ---
-        and_query = f"{keywords}, {', '.join(communities)}"
-        with st.spinner('🎯 1차 정밀 탐색 중 (AND)...'):
+        # --- [1단계] 정밀 강제 탐색 (단위 키워드 포함) ---
+        # "아이폰, 15, 원, 만, (뽐뿌 OR 루리웹 OR 클리앙)" 형태로 검색 유도
+        and_query = f"{keywords}, 원, 만, {communities}"
+        with st.spinner('🎯 가격 데이터 정밀 추적 중 (1/2)...'):
             res_and = CommunityHotDealEngine.fetch_from_google(and_query, headers)
             
         if res_and == "BOT_DETECTED": return "BOT_DETECTED"
@@ -71,9 +73,9 @@ class CommunityHotDealEngine:
             res_and.sort()
             return res_and[0]
 
-        # --- [2단계] OR 기반 광역 탐색 (1단계 실패 시) ---
-        or_query = f"{product_name} ({' OR '.join(communities)})"
-        with st.spinner('🌐 2차 광역 탐색 중 (OR)...'):
+        # --- [2단계] 광역 흔적 스캔 (보수적 폴백) ---
+        or_query = f"{product_name} 시세 가격 {communities}"
+        with st.spinner('🌐 시세 흔적 광역 스캔 중 (2/2)...'):
             res_or = CommunityHotDealEngine.fetch_from_google(or_query, headers)
             
         if res_or == "BOT_DETECTED": return "BOT_DETECTED"
@@ -84,7 +86,7 @@ class CommunityHotDealEngine:
         return "INFO_NOT_FOUND"
 
 # ==========================================
-# 2. UI 스타일 및 리셋 (변경 금지 원칙 준수)
+# 2. UI 및 리셋 기능 (기존 디자인 원칙 준수)
 # ==========================================
 def apply_custom_style():
     st.set_page_config(page_title="지름신 판독기", layout="centered")
@@ -133,15 +135,18 @@ def main():
             lines = [l.strip() for l in text_raw.split('\n') if len(l.strip()) > 2]
             f_name = lines[0] if lines else ""
             if f_name: st.info(f"🔍 인식 결과: **{f_name}**")
+            
     elif sel_tab == "✍️ 직접 상품명 입력":
-        f_name = st.text_input("📦 상품명", placeholder="키워드 위주 입력 (예: 아이폰, 15, 프로)")
+        f_name = st.text_input("📦 상품명", placeholder="예: 아이폰, 15, 자급제")
         p_val = st.text_input("💰 현재 확인 가격", placeholder="숫자만 입력")
         if f_name and p_val:
-            f_price = int(re.sub(r'[^0-9]', '', p_val))
+            try:
+                f_price = int(re.sub(r'[^0-9]', '', p_val))
+            except: f_price = 0
 
     if st.button("⚖️ 실시간 데이터 기반 판결 실행", use_container_width=True):
         if not f_name:
-            st.error("❗ 상품 정보를 입력해주세요.")
+            st.error("❗ 상품명을 입력해주세요.")
         else:
             result = CommunityHotDealEngine.get_realtime_price(f_name)
             
@@ -150,20 +155,21 @@ def main():
                 st.subheader(f"📊 '{f_name}' 판결 리포트")
                 c1, c2 = st.columns(2)
                 c1.metric("나의 확인가", f"{f_price:,}원")
-                c2.metric("분석된 최저가", f"{result:,}원")
+                c2.metric("커뮤니티 시세", f"{result:,}원")
                 st.markdown("---")
                 if f_price <= result:
-                    st.success("🔥 **역대급 딜!** 커뮤니티 시세보다 저렴합니다.")
+                    st.success("🔥 **역대급 가격!** 지금 바로 탑승하세요.")
                 else:
-                    st.error(f"💀 **주의!** 커뮤니티 시세보다 {f_price - result:,}원 비쌉니다.")
+                    st.error(f"💀 **주의!** 시세보다 {f_price - result:,}원 더 비쌉니다.")
+                
                 q_enc = urllib.parse.quote(f_name)
                 st.markdown(f'<a href="https://search.shopping.naver.com/search/all?query={q_enc}" target="_blank" class="naver-btn">🛒 네이버 쇼핑 실시간 확인</a>', unsafe_allow_html=True)
                 st.markdown(f'<a href="https://www.ppomppu.co.kr/zboard/zboard.php?id=ppomppu&keyword={q_enc}" target="_blank" class="ppomppu-btn">🔥 뽐뿌 실시간 핫딜 글 보기</a>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             elif result == "BOT_DETECTED":
-                st.error("🚫 **봇 감지로 실패**: 구글 접속이 일시 차단되었습니다. 잠시 후 시도하세요.")
+                st.error("🚫 **봇 감지로 실패**: 구글 접속이 일시 차단되었습니다. 잠시 후 재시도 바랍니다.")
             else:
-                st.warning("**⚠️ 정보 수집 실패**: 구글 검색 결과에서 가격 데이터를 찾지 못했습니다.\n\n**팁**: 모델명 뒤에 '자급제' 혹은 '용량'을 붙여보세요.")
+                st.warning(f"**⚠️ 정보 수집 실패**: '{f_name}'에 대한 명확한 가격 기록을 찾지 못했습니다.\n\n**💡 팁**: 상품명에 '자급제', '128GB' 같은 사양을 추가하거나 영어 이름을 섞어보세요!")
 
 if __name__ == "__main__":
     main()
