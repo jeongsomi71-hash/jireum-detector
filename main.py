@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -8,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 엔진 (필터 강화 및 링크 수정)
+# 1. 시세 분석 엔진 (장터 제외 및 가이드 강화)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -18,10 +17,10 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # 클리앙 404 방지를 위한 최신 검색 주소 체계 적용
+        # 클리앙: 통합검색을 사용하되 장터(market) 제외 파라미터 적용 시도
         sites = {
             "뽐뿌": f"https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={encoded_query}&category=1",
-            "클리앙": f"https://www.clien.net/service/search?q={encoded_query}&sort=recency&boardName=all_use"
+            "클리앙": f"https://www.clien.net/service/search?q={encoded_query}&sort=recency"
         }
         all_data = []
         for name, url in sites.items():
@@ -36,21 +35,27 @@ class AdvancedSearchEngine:
                             extra.decompose()
                         p_title = item.get_text(strip=True)
                         p_title = re.sub(r'[\(\[]\d+[\)\]]$', '', p_title).strip()
-                        if p_title: all_data.append({"title": p_title})
+                        if p_title: all_data.append({"title": p_title, "source": "뽐뿌"})
                 else: # 클리앙
-                    items = soup.select('.list_subject .subject_fixed')
-                    for item in items:
-                        p_title = item.get_text(strip=True)
-                        p_title = re.sub(r'[\(\[]\d+[\)\]]$', '', p_title).strip()
-                        if p_title: all_data.append({"title": p_title})
+                    # 장터 게시판 결과는 건너뛰도록 처리
+                    search_rows = soup.select('.list_item')
+                    for row in search_rows:
+                        board_name = row.select_one('.board_name')
+                        if board_name and "장터" in board_name.get_text():
+                            continue
+                        
+                        subject = row.select_one('.subject_fixed')
+                        if subject:
+                            p_title = subject.get_text(strip=True)
+                            p_title = re.sub(r'[\(\[]\d+[\)\]]$', '', p_title).strip()
+                            all_data.append({"title": p_title, "source": "클리앙"})
             except: continue
         return all_data
 
     @staticmethod
     def categorize_deals(items, user_excludes):
-        # [강화] 상품권 및 사은품 관련 키워드 추가
         gift_keywords = ["상품권", "증정", "페이백", "포인트", "캐시백", "이벤트", "경품"]
-        base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
+        base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입", "장터", "판매"]
         total_excludes = base_excludes + [x.strip() for x in user_excludes.split(',') if x.strip()]
         
         exclude_pattern = re.compile('|'.join(map(re.escape, total_excludes)))
@@ -64,24 +69,21 @@ class AdvancedSearchEngine:
             found = price_pattern.findall(title)
             if not found: continue
             
-            # 가격 추출
             num = int(found[0][0].replace(',', ''))
             if found[0][1] == '만': num *= 10000
-            if num < 5000: continue # 너무 낮은 가격 기본 제외
+            if num < 5000: continue 
 
-            # [핵심] 제목에 상품권 키워드가 있는데 가격이 너무 낮으면 사은품으로 간주
-            if any(k in title for k in gift_keywords) and num < 100000: # 10만원 미만 상품권 차단
+            if any(k in title for k in gift_keywords) and num < 100000:
                 continue
 
             raw_results.append({"price": num, "title": title})
 
         if not raw_results: return {}
 
-        # IQR 이상치 제거 (상위/하위 25% 밖의 극단값 제거)
         prices = [x['price'] for x in raw_results]
         q1, q3 = np.percentile(prices, [25, 75])
         iqr = q3 - q1
-        lower_bound = q1 - (1.2 * iqr) # 범위를 조금 더 좁게 설정하여 정밀도 향상
+        lower_bound = q1 - (1.2 * iqr)
         upper_bound = q3 + (1.2 * iqr)
         filtered_results = [x for x in raw_results if lower_bound <= x['price'] <= upper_bound]
 
@@ -107,7 +109,7 @@ class AdvancedSearchEngine:
         txt = " ".join([i['title'] for i in items])
         p = sum(1 for k in pos_k if k in txt)
         n = sum(1 for k in neg_k if k in txt)
-        if p > n: return "pos", "🔥 **긍정**: 실사용자들의 평이 좋고 가성비가 우수합니다."
+        if p > n: return "pos", "🔥 **긍정**: 실사용자 평이 좋고 가성비가 우수합니다."
         if n > p: return "neg", "🧊 **주의**: 최근 평이 좋지 않거나 종료된 딜일 수 있습니다."
         return "neu", "💬 **안정**: 현재 시세와 실사용 여론은 평이한 수준입니다."
 
@@ -115,7 +117,7 @@ class AdvancedSearchEngine:
 # 2. UI 메인 로직
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v5.6", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v5.7", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -128,10 +130,9 @@ def apply_style():
         .pos-box { background-color: rgba(0, 255, 136, 0.1); border-color: #00FF88; color: #00FF88; }
         .neg-box { background-color: rgba(255, 85, 85, 0.1); border-color: #FF5555; color: #FF5555; }
         .neu-box { background-color: rgba(255, 255, 255, 0.05); border-color: #FFFFFF; color: #FFFFFF; }
-        .judgment-box { padding: 12px; border-radius: 8px; font-weight: 900; text-align: center; margin-top: 10px; }
         .stButton>button { width: 100%; border: 2px solid #00FF88 !important; background-color: #000000 !important; color: #00FF88 !important; font-weight: bold !important; height: 3.5rem; }
         .link-btn { background-color: #1A1A1A !important; color: #00FF88 !important; padding: 12px; border-radius: 5px; text-align: center; font-size: 1rem; border: 1px solid #00FF88; text-decoration: none; display: block; margin-bottom: 8px; font-weight: bold; }
-        .version-footer { text-align: center; color: #444444; font-size: 0.8rem; margin-top: 50px; font-weight: bold; }
+        .guide-box { background-color: #332200; border: 1px solid #FFD700; color: #FFD700; padding: 15px; border-radius: 8px; margin: 10px 0; font-size: 0.9rem; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -140,7 +141,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v5.6</div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v5.7</div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.get('s_name', ""))
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.get('s_price', ""))
@@ -156,8 +157,7 @@ def main():
                     s_type, s_msg = AdvancedSearchEngine.summarize_sentiment(raw)
                     data = {"name": in_name, "user_price": in_price, "results": res, "s_type": s_type, "s_msg": s_msg, "time": datetime.now().strftime('%H:%M')}
                     st.session_state.current_data = data
-                    if data not in st.session_state.history:
-                        st.session_state.history.insert(0, data)
+                    if data not in st.session_state.history: st.session_state.history.insert(0, data)
                     st.rerun()
     with c2:
         if st.button("🔄 리셋"):
@@ -166,32 +166,39 @@ def main():
 
     if st.session_state.current_data:
         d = st.session_state.current_data
-        box_class = f"{d['s_type']}-box" if d['s_type'] else "neu-box"
-        st.markdown(f'<div class="sentiment-highlight {box_class}">{d["s_msg"]}</div>', unsafe_allow_html=True)
-
-        for opt_key, items in sorted(d['results'].items(), reverse=True):
-            items = sorted(items, key=lambda x: x['price'])
-            best = items[0]
-            rel_txt, rel_col = ("높음", "#00FF88") if len(items) >= 3 else ("보통", "#FFD700") if len(items) >= 2 else ("낮음", "#FF5555")
-
+        
+        if not d['results']:
             st.markdown(f'''
-            <div class="detail-card">
-                <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {rel_txt} (상품권 필터 적용됨)</span><br>
-                <span class="price-highlight">{best['price']:,}원</span>
-                <span class="core-title">{best['title']}</span>
+            <div class="guide-box">
+                ⚠️ <b>시세 정보 추출 실패</b><br>
+                입력하신 "{d['name']}"에 대한 명확한 가격 정보가 없습니다.<br>
+                - <b>모델명</b>을 구체적으로 입력해보세요 (예: 워치6 -> 갤럭시워치6 44mm)<br>
+                - <b>나의 확인가</b>를 입력하면 시세 판독이 더 정확해집니다.
             </div>
             ''', unsafe_allow_html=True)
-            
-            if d['user_price'].isdigit():
-                diff = int(d['user_price']) - best['price']
-                if diff <= 0: st.markdown('<div class="judgment-box" style="background:#004d40; color:#00FF88;">✅ 즉시 지르세요!</div>', unsafe_allow_html=True)
-                else: st.markdown(f'<div class="judgment-box" style="background:#4d0000; color:#FF5555;">❌ 차액 {diff:,}원 발생</div>', unsafe_allow_html=True)
+        else:
+            box_class = f"{d['s_type']}-box" if d['s_type'] else "neu-box"
+            st.markdown(f'<div class="sentiment-highlight {box_class}">{d["s_msg"]}</div>', unsafe_allow_html=True)
+
+            for opt_key, items in sorted(d['results'].items(), reverse=True):
+                items = sorted(items, key=lambda x: x['price'])
+                best = items[0]
+                st.markdown(f'''
+                <div class="detail-card">
+                    <span class="price-highlight">{best['price']:,}원</span>
+                    <span class="core-title">{best['title']}</span>
+                </div>
+                ''', unsafe_allow_html=True)
+                
+                if d['user_price'].isdigit():
+                    diff = int(d['user_price']) - best['price']
+                    if diff <= 0: st.markdown('<div style="padding:12px; border-radius:8px; font-weight:900; text-align:center; margin-top:10px; background:#004d40; color:#00FF88;">✅ 즉시 지르세요!</div>', unsafe_allow_html=True)
+                    else: st.markdown(f'<div style="padding:12px; border-radius:8px; font-weight:900; text-align:center; margin-top:10px; background:#4d0000; color:#FF5555;">❌ 차액 {diff:,}원 발생</div>', unsafe_allow_html=True)
 
         eq = urllib.parse.quote(d['name'])
         cl1, cl2 = st.columns(2)
         cl1.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={eq}&category=1" class="link-btn" target="_blank">뽐뿌 바로가기</a>', unsafe_allow_html=True)
-        # 404 해결된 클리앙 사용기 검색 링크
-        cl2.markdown(f'<a href="https://www.clien.net/service/search?q={eq}&sort=recency&boardName=all_use" class="link-btn" target="_blank">클리앙 사용기 바로가기</a>', unsafe_allow_html=True)
+        cl2.markdown(f'<a href="https://www.clien.net/service/search?q={eq}&sort=recency" class="link-btn" target="_blank">클리앙 통합(장터제외)</a>', unsafe_allow_html=True)
 
     if st.session_state.history:
         st.write("---")
@@ -201,6 +208,6 @@ def main():
                 st.session_state.current_data = h
                 st.rerun()
 
-    st.markdown('<div class="version-footer">Version: v5.6 - Gift-card Filtering & 404 Link Fixed</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v5.7 - Guide Mode & Market Excluded</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
