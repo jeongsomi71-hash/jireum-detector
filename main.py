@@ -7,12 +7,23 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 및 역전 방지 엔진
+# 1. 시세 분석 및 핵심 키워드 추출 엔진
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
     def get_mobile_headers():
         return {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
+
+    @staticmethod
+    def extract_core_keyword(full_title):
+        """상품명에서 불필요한 수식어를 제거하고 핵심만 추출 (v3.3 신규)"""
+        # 특수문자 및 불필요한 단어 제거
+        clean_name = re.sub(r'\[.*?\]|\(.*?\)|\!|\?|\★|\☆', '', full_title)
+        # 가격 정보나 날짜 정보 제거
+        clean_name = re.sub(r'[0-9,]{4,}원|[0-9]{1,2}\/[0-9]{1,2}', '', clean_name)
+        # 핵심 키워드만 남기기 위해 앞뒤 공백 정리 및 단어 수 제한 (최대 6단어)
+        words = clean_name.split()
+        return " ".join(words[:6]) if len(words) > 6 else " ".join(words)
 
     @staticmethod
     def search_all(product_name):
@@ -36,24 +47,26 @@ class AdvancedSearchEngine:
     @staticmethod
     def clean_prices_robust(price_list):
         if not price_list: return []
-        prices = sorted(list(set(price_list))) 
-        if 1 < len(prices) <= 3:
-            if prices[0] < prices[1] * 0.5: prices.pop(0)
-        elif len(prices) >= 4:
-            arr = np.array(prices)
+        raw_prices = [p[0] for p in price_list]
+        prices_sorted = sorted(list(set(raw_prices)))
+        if 1 < len(prices_sorted) <= 3:
+            if prices_sorted[0] < prices_sorted[1] * 0.5: prices_sorted.pop(0)
+        elif len(prices_sorted) >= 4:
+            arr = np.array(prices_sorted)
             mean, std = np.mean(arr), np.std(arr)
-            prices = [p for p in prices if (mean - 3*std) <= p <= (mean + 3*std)]
-        return sorted(prices)
+            prices_sorted = [p for p in prices_sorted if (mean - 3*std) <= p <= (mean + 3*std)]
+        final_data = [p for p in price_list if p[0] in prices_sorted]
+        return sorted(final_data, key=lambda x: x[0])
 
     @staticmethod
     def summarize_sentiment(titles):
-        if not titles: return "분석할 데이터가 부족합니다."
+        if not titles: return "데이터 부족"
         pos_k, neg_k = ["역대급", "최저가", "좋네요", "가성비", "지름", "추천"], ["품절", "종료", "비싸", "아쉽", "비추"]
         txt = " ".join(titles)
         p, n = sum(1 for k in pos_k if k in txt), sum(1 for k in neg_k if k in txt)
-        if p > n: return "🔥 **긍정 여론**: 최근 가성비가 훌륭하며 커뮤니티 추천 빈도가 높습니다."
-        if n > p: return "🧊 **주의 여론**: 최근 가격 상승이나 품절 이슈가 확인됩니다."
-        return "💬 **안정적 여론**: 시세 변동이 적고 평이 무난한 상태입니다."
+        if p > n: return "🔥 **긍정**: 가성비가 훌륭하며 커뮤니티 추천 빈도가 높습니다."
+        if n > p: return "🧊 **주의**: 최근 가격 상승이나 품절 이슈가 확인됩니다."
+        return "💬 **안정**: 시세 변동이 적고 평이 무난한 상태입니다."
 
     @staticmethod
     def categorize_deals(titles, search_query, user_excludes):
@@ -72,22 +85,19 @@ class AdvancedSearchEngine:
             if num < 10000: continue 
 
             t_low = text.lower()
-            # 세부 스펙 판독 (복구)
-            spec_tag = "일반"
+            spec_tag = "기본"
             if any(k in t_low for k in ["10인용", "10인"]): spec_tag = "10인용"
             elif any(k in t_low for k in ["6인용", "6인"]): spec_tag = "6인용"
-            
             if "256" in t_low: spec_tag += " 256G"
             elif "512" in t_low: spec_tag += " 512G"
             elif "울트라" in t_low or "ultra" in t_low: spec_tag += " Ultra"
 
             if spec_tag not in categorized: categorized[spec_tag] = []
-            categorized[spec_tag].append(num)
+            categorized[spec_tag].append((num, text))
         
         cleaned = {k: AdvancedSearchEngine.clean_prices_robust(v) for k, v in categorized.items()}
-        # 가격 역전 방지
         if "10인용" in cleaned and "6인용" in cleaned:
-            if cleaned["10인용"][0] < cleaned["6인용"][0] * 0.8:
+            if cleaned["10인용"][0][0] < cleaned["6인용"][0][0] * 0.8:
                 if len(cleaned["10인용"]) > 1: cleaned["10인용"].pop(0)
         return {k: v for k, v in cleaned.items() if v}
 
@@ -95,7 +105,7 @@ class AdvancedSearchEngine:
 # 2. UI 및 로직 통합
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v3.1", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v3.3", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -103,9 +113,11 @@ def apply_style():
         .unified-header { background-color: #FFFFFF !important; color: #000000 !important; text-align: center; font-size: 1.6rem; font-weight: 900; padding: 15px; border-radius: 12px; margin-bottom: 25px; border: 4px solid #00FF88; }
         .detail-card { border: 2px solid #00FF88 !important; padding: 20px; border-radius: 12px; margin-top: 15px; background-color: #1A1A1A !important; }
         .price-highlight { color: #00FF88 !important; font-size: 2.2rem !important; font-weight: 900 !important; float: right; }
+        .core-title { color: white; font-weight: 900; font-size: 1.25rem; display: block; margin-bottom: 5px; }
+        .full-title-meta { color: #777777; font-size: 0.8rem; line-height: 1.2; display: block; margin-top: 8px; font-style: italic; }
         .judgment-box { padding: 10px; border-radius: 8px; font-weight: 900; text-align: center; margin-top: 10px; font-size: 1.1rem; }
         .stButton>button { width: 100%; border: 2px solid #00FF88 !important; background-color: #000000 !important; color: #00FF88 !important; font-weight: bold !important; height: 3.5rem; }
-        .link-btn { background-color: #333 !important; color: white !important; padding: 8px; border-radius: 5px; text-align: center; font-size: 0.8rem; border: 1px solid #555; text-decoration: none; display: block; margin-bottom: 5px; }
+        .link-btn { background-color: #1A1A1A !important; color: #00FF88 !important; padding: 10px; border-radius: 5px; text-align: center; font-size: 0.9rem; border: 1px solid #00FF88; text-decoration: none; display: block; margin-bottom: 5px; font-weight: bold; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -116,7 +128,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.1</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.3</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.s_name)
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.s_price)
@@ -127,16 +139,14 @@ def main():
         if st.button("🔍 시세 판독 실행"):
             if in_name:
                 st.session_state.s_name, st.session_state.s_price = in_name, in_price
-                with st.spinner('🏘️ 시세 분석 중...'):
+                with st.spinner('🏘️ 키워드 추출 및 시세 분석 중...'):
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_name, in_exclude)
                     data = {"name": in_name, "user_price": in_price, "results": res, "summary": AdvancedSearchEngine.summarize_sentiment(raw), "time": datetime.now().strftime('%H:%M')}
                     st.session_state.current_data = data
-                    # 히스토리 중복 제거 후 추가
                     st.session_state.history = [h for h in st.session_state.history if h['name'] != in_name]
                     st.session_state.history.insert(0, data)
                     st.rerun()
-
     with col_reset:
         if st.button("🔄 리셋"):
             st.session_state.s_name, st.session_state.s_price, st.session_state.current_data = "", "", None
@@ -147,16 +157,20 @@ def main():
         st.info(d["summary"])
         
         if not d['results']:
-            st.warning("분석 결과가 없습니다. 제품명을 더 정확하게 입력해보세요.")
+            st.warning("분석 결과가 없습니다.")
         else:
-            for key, prices in sorted(d['results'].items(), reverse=True):
-                min_p, count = prices[0], len(prices)
-                rel_txt, rel_col = ("🟢 신뢰도 높음", "#00FF88") if count >= 4 else ("🔴 신뢰도 낮음", "#FF5555")
+            for opt_key, items in sorted(d['results'].items(), reverse=True):
+                min_p, best_title = items[0]
+                core_title = AdvancedSearchEngine.extract_core_keyword(best_title)
+                count = len(items)
+                rel_col = "#00FF88" if count >= 4 else "#FF5555"
+                
                 st.markdown(f'''
                 <div class="detail-card">
-                    <span style="color:{rel_col}; font-weight:bold; font-size:0.85rem;">{rel_txt} (표본 {count}건)</span><br>
-                    <span style="color:white; font-weight:bold; font-size:1.3rem;">{key}</span>
+                    <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {("보통" if count>=4 else "낮음")} (표본 {count}건)</span><br>
+                    <span class="core-title">{core_title}</span>
                     <span class="price-highlight">{min_p:,}원</span>
+                    <span class="full-title-meta">옵션: {opt_key} | 원본: {best_title[:50]}...</span>
                 </div>
                 ''', unsafe_allow_html=True)
                 
@@ -169,20 +183,19 @@ def main():
         st.write("")
         eq = urllib.parse.quote(d['name'])
         cl1, cl2 = st.columns(2)
-        cl1.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={eq}&category=1" class="link-btn">뽐뿌 시세 확인</a>', unsafe_allow_html=True)
-        cl2.markdown(f'<a href="https://www.clien.net/service/search?q={eq}" class="link-btn">클리앙 시세 확인</a>', unsafe_allow_html=True)
+        cl1.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={eq}&category=1" class="link-btn">뽐뿌 확인</a>', unsafe_allow_html=True)
+        cl2.markdown(f'<a href="https://www.clien.net/service/search?q={eq}" class="link-btn">클리앙 확인</a>', unsafe_allow_html=True)
 
     if st.session_state.history:
         st.write("---")
         st.subheader("📜 최근 판독 이력 (10개)")
         for idx, h in enumerate(st.session_state.history[:10]):
-            # [해결] StopIteration 방지를 위해 결과가 있을 때만 가격 표시
             hist_price = "결과없음"
             if h['results']:
                 try:
-                    first_val = next(iter(h['results'].values()))
-                    hist_price = f"{first_val[0]:,}원"
-                except StopIteration: pass
+                    first_item = next(iter(h['results'].values()))[0]
+                    hist_price = f"{first_item[0]:,}원"
+                except: pass
             
             if st.button(f"[{h['time']}] {h['name']} ({hist_price})", key=f"hi_{idx}"):
                 st.session_state.current_data = h
@@ -190,4 +203,4 @@ def main():
                 st.rerun()
 
 if __name__ == "__main__": main()
-# Version: v3.1 - Critical Fix: StopIteration Error in History. All previous features maintained.
+# Version: v3.3 - Updated: Core keyword extraction & UI Cleanup (Removed 'Price' from buttons).
