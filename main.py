@@ -7,12 +7,20 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 엔진 (강력한 수집 로직 원복)
+# 1. 시세 분석 엔진 (강력한 수집 엔진 유지 + 필터링 강화)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
     def get_mobile_headers():
         return {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
+
+    @staticmethod
+    def clean_nickname_and_meta(text):
+        """닉네임 및 기타 메타정보를 확실하게 제거 (v3.8 교정)"""
+        # 닉네임이 제목 뒤에 붙는 패턴 차단 (공백/하이픈/슬래시 뒤의 단어들 정리)
+        # 보통 뽐뿌/클리앙 리스트에서 닉네임은 별도 태그에 있으나, 텍스트가 섞일 경우 대비
+        clean_text = re.split(r'\s{2,}|/| - ', text)[0] 
+        return clean_text.strip()
 
     @staticmethod
     def search_all(product_name):
@@ -26,20 +34,20 @@ class AdvancedSearchEngine:
             try:
                 res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
                 soup = BeautifulSoup(res.text, 'html.parser')
-                # 기존의 넓은 범위 수집 로직으로 원복
-                if name == "뽐뿌":
-                    items = soup.select('.title, .content') 
-                else:
-                    items = soup.select('.list_subject .subject_fixed, .subject_fixed')
+                # 기존의 광범위한 수집 범위 (title, content 모두 포함) 절대 유지
+                items = soup.select('.title, .content') if name == "뽐뿌" else soup.select('.list_subject .subject_fixed, .subject_fixed')
                 
                 for item in items:
                     raw_text = item.get_text(strip=True)
                     if not raw_text: continue
                     
-                    # [표시 개선 요청 반영] 댓글 수 분리 및 닉네임 제거 로직
+                    # 댓글 수 분리
                     comment_match = re.search(r'\[(\d+)\]$', raw_text)
                     comment_count = int(comment_match.group(1)) if comment_match else 0
-                    pure_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
+                    
+                    # 제목에서 댓글수 제거 및 [닉네임 제거 적용]
+                    title_only = re.sub(r'\[\d+\]$', '', raw_text).strip()
+                    pure_title = AdvancedSearchEngine.clean_nickname_and_meta(title_only)
                     
                     # 일자 추출
                     date_text = datetime.now().strftime('%y/%m/%d')
@@ -68,7 +76,6 @@ class AdvancedSearchEngine:
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
         total_excludes = base_excludes + [x.strip() for x in user_excludes.split(',') if x.strip()]
         exclude_pattern = re.compile('|'.join(map(re.escape, total_excludes)))
-        # 기존의 광범위한 가격 추출 정규식 원복
         price_pattern = re.compile(r'([0-9,]{1,10})\s?(원|만)')
         
         categorized = {}
@@ -100,7 +107,7 @@ class AdvancedSearchEngine:
 # 2. UI 및 로직 통합
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v3.7", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v3.8", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -108,7 +115,7 @@ def apply_style():
         .unified-header { background-color: #FFFFFF !important; color: #000000 !important; text-align: center; font-size: 1.6rem; font-weight: 900; padding: 15px; border-radius: 12px; margin-bottom: 25px; border: 4px solid #00FF88; }
         .detail-card { border: 2px solid #00FF88 !important; padding: 20px; border-radius: 12px; margin-top: 15px; background-color: #1A1A1A !important; }
         .price-highlight { color: #00FF88 !important; font-size: 2.2rem !important; font-weight: 900 !important; float: right; }
-        .core-title { color: white; font-weight: 900; font-size: 1.2rem; display: block; width: 70%; line-height: 1.3; }
+        .core-title { color: white; font-weight: 900; font-size: 1.15rem; display: block; width: 70%; line-height: 1.3; }
         .meta-info { color: #888888; font-size: 0.8rem; margin-top: 10px; display: flex; gap: 12px; }
         .badge { background: #333; padding: 2px 8px; border-radius: 4px; color: #00FF88; font-weight: bold; }
         .judgment-box { padding: 10px; border-radius: 8px; font-weight: 900; text-align: center; margin-top: 10px; font-size: 1.1rem; }
@@ -125,7 +132,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.7</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.8</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.s_name)
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.s_price)
@@ -136,7 +143,7 @@ def main():
         if st.button("🔍 시세 판독 실행"):
             if in_name:
                 st.session_state.s_name, st.session_state.s_price = in_name, in_price
-                with st.spinner('🏘️ 광범위 시세 데이터 분석 중...'):
+                with st.spinner('🏘️ 정밀 분석 중...'):
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_exclude)
                     summ = AdvancedSearchEngine.summarize_sentiment(raw)
@@ -157,14 +164,18 @@ def main():
             items = sorted(items, key=lambda x: x['price'])
             best = items[0]
             avg_c = sum(i['comments'] for i in items) / len(items)
-            score = len(items) * 2 + avg_c
-            rel_col = "#00FF88" if score >= 10 else "#FFD700" if score >= 5 else "#FF5555"
+            
+            # [신뢰도 로직 교정] 점수가 낮으면 확실하게 '낮음' 표시
+            score = len(items) * 1.5 + avg_c
+            if score >= 12: rel_txt, rel_col = "높음", "#00FF88"
+            elif score >= 7: rel_txt, rel_col = "보통", "#FFD700"
+            else: rel_txt, rel_col = "낮음", "#FF5555"
 
             st.markdown(f'''
             <div class="detail-card">
-                <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {("높음" if score>=10 else "보통")} (점수: {score:.1f})</span><br>
+                <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {rel_txt} (관심도: {score:.1f})</span><br>
                 <span class="price-highlight">{best['price']:,}원</span>
-                <span class="core-title">{best['title'][:45]}...</span>
+                <span class="core-title">{best['title'][:50]}</span>
                 <div class="meta-info">
                     <span>📅 {best['date']}</span>
                     <span>💬 댓글 <span class="badge">{best['comments']}</span></span>
@@ -192,7 +203,6 @@ def main():
                 st.session_state.s_name, st.session_state.s_price = h['name'], h['user_price']
                 st.rerun()
 
-    st.markdown('<div class="version-footer">Version: v3.7 - Restored Engine & UI Enhanced</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-footer">Version: v3.8 - Accuracy Fix & Full Engine Maintained</div>', unsafe_allow_html=True)
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
