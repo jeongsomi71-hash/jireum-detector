@@ -64,7 +64,7 @@ class TripleCommunityEngine:
         return sorted(prices)
 
 # ==========================================
-# 2. UI 스타일 및 리셋 유틸리티
+# 2. UI 스타일 및 유틸리티
 # ==========================================
 def apply_custom_style():
     st.set_page_config(page_title="지름신 판독기 PRO", layout="centered")
@@ -75,7 +75,8 @@ def apply_custom_style():
         html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; background-color: #000000 !important; color: #FFFFFF !important; }
         .unified-header { background-color: #FFFFFF; color: #000000 !important; text-align: center; font-size: 1.8rem; font-weight: 900; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 4px solid #00FF88; }
         .result-box { border: 2px solid #00FF88; padding: 25px; border-radius: 15px; margin-top: 20px; background-color: #0A0A0A; }
-        .stButton>button[kind="secondary"] { width: 100%; background-color: #333; color: white; border: none; }
+        /* 버튼 스타일 수정 */
+        .stButton>button { width: 100%; border-radius: 10px; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -92,13 +93,13 @@ def main():
     
     st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO</div>', unsafe_allow_html=True)
 
-    # [중대원칙] 우측 상단 리셋 버튼
+    # [중대원칙 1] 우측 상단 리셋 버튼 (에러 수정됨)
     col_title, col_reset = st.columns([4, 1])
     with col_reset:
-        if st.button("🔄 리셋", kind="secondary"):
+        if st.button("🔄 리셋"): # kind 인자 제거하여 에러 방지
             reset_state()
 
-    # [중대원칙] 이미지 검색 및 직접 입력 탭
+    # [중대원칙 2] 이미지 검색 및 탭 구조
     tabs = ["📸 이미지 판결", "✍️ 직접 상품명 입력"]
     sel_tab = st.radio("📥 판독 방식 선택", tabs, horizontal=True)
 
@@ -116,22 +117,22 @@ def main():
             f_name = lines[0] if lines else ""
             if f_name: 
                 st.info(f"🔍 이미지 인식 결과: **{f_name}**")
-                # 이미지 인식 가격 입력창
-                p_val_img = st.text_input("💰 확인하신 가격 입력", key="img_price")
-                if p_val_img: f_price = int(re.sub(r'[^0-9]', '', p_val_img))
+                p_val_img = st.text_input("💰 확인하신 가격 입력 (숫자만)", key="img_price")
+                if p_val_img: 
+                    f_price = int(re.sub(r'[^0-9]', '', p_val_img))
 
     elif sel_tab == "✍️ 직접 상품명 입력":
-        f_name = st.text_input("📦 상품명 (예: 아이폰 15)", placeholder="쉼표(,)로 구분하면 더 정확합니다")
+        f_name = st.text_input("📦 상품명", placeholder="예: 아이폰, 15, 자급제")
         p_val = st.text_input("💰 확인하신 가격", placeholder="숫자만 입력")
         if f_name and p_val:
             f_price = int(re.sub(r'[^0-9]', '', p_val))
 
-    if st.button("⚖️ 통합 시세 판결 실행", use_container_width=True):
+    # [중대원칙 3] 블랙 & 그린 디자인의 실행 버튼
+    if st.button("⚖️ 통합 시세 판결 실행"):
         if not f_name or f_price == 0:
             st.error("❗ 상품명과 가격을 모두 정확히 입력해주세요.")
         else:
-            with st.spinner('🏘️ 3대 커뮤니티(뽐뿌, 루리웹, 클리앙) 기록을 분석 중입니다...'):
-                # 병렬 탐색 시뮬레이션
+            with st.spinner('🏘️ 3대 커뮤니티 시세를 분석 중입니다...'):
                 p_data = TripleCommunityEngine.search_ppomppu(f_name)
                 r_data = TripleCommunityEngine.search_ruliweb(f_name)
                 c_data = TripleCommunityEngine.search_clien(f_name)
@@ -141,19 +142,19 @@ def main():
             if all_prices:
                 low_price = all_prices[0]
                 st.markdown('<div class="result-box">', unsafe_allow_html=True)
-                st.subheader(f"📊 '{f_name}' 시세 분석 결과")
+                st.subheader(f"📊 '{f_name}' 판결 결과")
                 c1, c2 = st.columns(2)
                 c1.metric("나의 확인가", f"{f_price:,}원")
-                c2.metric("역대 기록 최저가", f"{low_price:,}원")
+                c2.metric("역대 최저가 기록", f"{low_price:,}원")
                 
                 diff = f_price - low_price
                 if diff <= 0:
-                    st.success("🔥 **역대급 딜!** 기록된 시세보다 저렴합니다. 지금 사세요!")
+                    st.success("🔥 **역대급 딜!** 즉시 구매를 추천합니다.")
                 else:
                     st.error(f"💀 **주의!** 역대 기록보다 {diff:,}원 더 비쌉니다.")
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.warning("⚠️ 커뮤니티 기록을 찾지 못했습니다. 키워드에 쉼표를 사용해 다시 시도해보세요 (예: 아이폰, 15).")
+                st.warning("⚠️ 커뮤니티 기록을 찾지 못했습니다. 쉼표(,)를 넣어 검색해보세요.")
 
 if __name__ == "__main__":
     main()
