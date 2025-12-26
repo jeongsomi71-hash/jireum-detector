@@ -6,7 +6,7 @@ import urllib.parse
 from datetime import datetime
 
 # ==========================================
-# 1. 시세 분석 엔진 (검증 완료 로직)
+# 1. 시세 분석 엔진
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -29,40 +29,27 @@ class AdvancedSearchEngine:
                 if name == "뽐뿌":
                     items = soup.select('.title')
                     for item in items:
-                        # 닉네임 구조적 제거
                         for extra in item.find_all(['span', 'em']):
                             extra.decompose() 
-                        
                         raw_text = item.get_text(strip=True)
                         if not raw_text: continue
                         
-                        # [검증 사항] 제목 끝의 댓글수 분리 및 제거
+                        # [검증] 댓글수 분리 및 제목에서 영구 제거
                         comment_match = re.search(r'\[(\d+)\]$', raw_text)
-                        comment_count = int(comment_match.group(1)) if comment_match else 0
-                        pure_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
+                        c_count = int(comment_match.group(1)) if comment_match else 0
+                        p_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
                         
-                        all_data.append({"title": pure_title, "comments": comment_count})
-                
+                        all_data.append({"title": p_title, "comments": c_count})
                 else: # 클리앙
                     items = soup.select('.list_subject .subject_fixed')
                     for item in items:
                         raw_text = item.get_text(strip=True)
                         comment_match = re.search(r'\[(\d+)\]$', raw_text)
-                        comment_count = int(comment_match.group(1)) if comment_match else 0
-                        pure_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
-                        all_data.append({"title": pure_title, "comments": comment_count})
+                        c_count = int(comment_match.group(1)) if comment_match else 0
+                        p_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
+                        all_data.append({"title": p_title, "comments": c_count})
             except: continue
         return all_data
-
-    @staticmethod
-    def summarize_sentiment(items):
-        if not items: return "데이터 부족"
-        pos_k, neg_k = ["역대급", "최저가", "좋네요", "가성비", "지름", "추천"], ["품절", "종료", "비싸", "아쉽", "비추"]
-        txt = " ".join([i['title'] for i in items])
-        p, n = sum(1 for k in pos_k if k in txt), sum(1 for k in neg_k if k in txt)
-        if p > n: return "🔥 **긍정**: 반응이 뜨겁고 가성비가 좋은 상태입니다."
-        if n > p: return "🧊 **주의**: 최근 평이 좋지 않거나 품절 우려가 있습니다."
-        return "💬 **안정**: 현재 시세와 여론은 평이한 수준입니다."
 
     @staticmethod
     def categorize_deals(items, user_excludes):
@@ -75,7 +62,6 @@ class AdvancedSearchEngine:
         for item in items:
             title = item['title']
             if exclude_pattern.search(title): continue
-            
             found = price_pattern.findall(title)
             if not found: continue
             
@@ -83,7 +69,6 @@ class AdvancedSearchEngine:
             if found[0][1] == '만': num *= 10000
             if num < 5000: continue 
 
-            # 사양 필터링 기능 유지
             t_low = title.lower()
             spec_tag = "일반"
             if any(k in t_low for k in ["10인용", "10인"]): spec_tag = "10인용"
@@ -92,18 +77,24 @@ class AdvancedSearchEngine:
             elif "512" in t_low: spec_tag += " 512G"
 
             if spec_tag not in categorized: categorized[spec_tag] = []
-            categorized[spec_tag].append({
-                "price": num, 
-                "title": title, 
-                "comments": item['comments']
-            })
+            categorized[spec_tag].append({"price": num, "title": title, "comments": item['comments']})
         return {k: v for k, v in categorized.items() if v}
 
+    @staticmethod
+    def summarize_sentiment(items):
+        if not items: return "데이터 부족"
+        pos_k, neg_k = ["역대급", "최저가", "좋네요", "가성비", "지름", "추천"], ["품절", "종료", "비싸", "아쉽", "비추"]
+        txt = " ".join([i['title'] for i in items])
+        p, n = sum(1 for k in pos_k if k in txt), sum(1 for k in neg_k if k in txt)
+        if p > n: return "🔥 **긍정**: 반응이 뜨겁고 가성비가 좋은 상태입니다."
+        if n > p: return "🧊 **주의**: 최근 평이 좋지 않거나 품절 우려가 있습니다."
+        return "💬 **안정**: 현재 시세와 여론은 평이한 수준입니다."
+
 # ==========================================
-# 2. UI 및 인터페이스 (누락 방지)
+# 2. UI 메인 (v4.7 버전명 명기 및 기능 통합)
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v4.6", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v4.7", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -128,7 +119,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v4.6</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v4.7</div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.s_name)
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.s_price)
@@ -136,7 +127,7 @@ def main():
 
     c1, c2 = st.columns([3, 1])
     with c1:
-        # [검증 사항] 문구 고정
+        # [검증] 판독 중 문구 고정
         if st.button("🔍 시세 판독 실행"):
             if in_name:
                 st.session_state.s_name, st.session_state.s_price = in_name, in_price
@@ -161,19 +152,16 @@ def main():
             items = sorted(items, key=lambda x: x['price'])
             best = items[0]
             avg_c = sum(i['comments'] for i in items) / len(items)
-            
             score = len(items) * 1.5 + avg_c
             rel_txt, rel_col = ("높음", "#00FF88") if score >= 10 else ("보통", "#FFD700") if score >= 5 else ("낮음", "#FF5555")
 
-            # [검증 사항] 제목에서 숫자가 제거되고 배지에만 반영된 카드
+            # [검증] 제목 정제 및 댓글 배지 단독 표기
             st.markdown(f'''
             <div class="detail-card">
                 <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {rel_txt} (점수: {score:.1f})</span><br>
                 <span class="price-highlight">{best['price']:,}원</span>
                 <span class="core-title">{best['title']}</span>
-                <div class="meta-info">
-                    <span>💬 댓글 <span class="badge">{best['comments']}</span></span>
-                </div>
+                <div class="meta-info"><span>💬 댓글 <span class="badge">{best['comments']}</span></span></div>
             </div>
             ''', unsafe_allow_html=True)
             
@@ -182,7 +170,7 @@ def main():
                 if diff <= 0: st.markdown('<div class="judgment-box" style="background:#004d40; color:#00FF88;">✅ 즉시 지르세요!</div>', unsafe_allow_html=True)
                 else: st.markdown(f'<div class="judgment-box" style="background:#4d0000; color:#FF5555;">❌ 차액 {diff:,}원 발생</div>', unsafe_allow_html=True)
 
-        # [검증 사항] 뽐뿌/클리앙 외부 링크 유지
+        # [검증] 외부 커뮤니티 링크 복구
         eq = urllib.parse.quote(d['name'])
         cl1, cl2 = st.columns(2)
         cl1.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={eq}&category=1" class="link-btn" target="_blank">뽐뿌 바로가기</a>', unsafe_allow_html=True)
@@ -190,13 +178,13 @@ def main():
 
     if st.session_state.history:
         st.write("---")
-        st.subheader("📜 최근 판독 이력 (10개)")
+        st.subheader("📜 최근 판독 이력")
         for idx, h in enumerate(st.session_state.history[:10]):
             if st.button(f"[{h['time']}] {h['name']}", key=f"hi_{idx}"):
                 st.session_state.current_data = h
                 st.session_state.s_name, st.session_state.s_price = h['name'], h['user_price']
                 st.rerun()
-
-    st.markdown('<div class="version-footer">Version: v4.6 - Verified Final Release</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="version-footer">Version: v4.7 - Full Verified</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
