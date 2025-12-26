@@ -64,7 +64,7 @@ class TripleCommunityEngine:
         return sorted(prices)
 
 # ==========================================
-# 2. UI 스타일 및 유틸리티
+# 2. UI 스타일 및 리셋 유틸리티
 # ==========================================
 def apply_custom_style():
     st.set_page_config(page_title="지름신 판독기 PRO", layout="centered")
@@ -92,14 +92,15 @@ def main():
     
     st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO</div>', unsafe_allow_html=True)
 
-    # [원칙] 우측 상단 리셋 버튼 배치
+    # [중대원칙] 우측 상단 리셋 버튼
     col_title, col_reset = st.columns([4, 1])
     with col_reset:
         if st.button("🔄 리셋", kind="secondary"):
             reset_state()
 
+    # [중대원칙] 이미지 검색 및 직접 입력 탭
     tabs = ["📸 이미지 판결", "✍️ 직접 상품명 입력"]
-    sel_tab = st.radio("📥 판독 방식", tabs, horizontal=True)
+    sel_tab = st.radio("📥 판독 방식 선택", tabs, horizontal=True)
 
     f_name, f_price = "", 0
 
@@ -108,23 +109,29 @@ def main():
         if file:
             img = Image.open(file)
             st.image(img, use_container_width=True)
+            # OCR 전처리
             proc = ImageOps.grayscale(img).filter(ImageFilter.SHARPEN)
             text_raw = pytesseract.image_to_string(proc, lang='kor+eng', config='--psm 6')
             lines = [l.strip() for l in text_raw.split('\n') if len(l.strip()) > 2]
             f_name = lines[0] if lines else ""
-            if f_name: st.info(f"🔍 인식 결과: **{f_name}**")
+            if f_name: 
+                st.info(f"🔍 이미지 인식 결과: **{f_name}**")
+                # 이미지 인식 가격 입력창
+                p_val_img = st.text_input("💰 확인하신 가격 입력", key="img_price")
+                if p_val_img: f_price = int(re.sub(r'[^0-9]', '', p_val_img))
 
     elif sel_tab == "✍️ 직접 상품명 입력":
-        f_name = st.text_input("📦 상품명", placeholder="예: 아이폰 15")
+        f_name = st.text_input("📦 상품명 (예: 아이폰 15)", placeholder="쉼표(,)로 구분하면 더 정확합니다")
         p_val = st.text_input("💰 확인하신 가격", placeholder="숫자만 입력")
         if f_name and p_val:
             f_price = int(re.sub(r'[^0-9]', '', p_val))
 
-    if st.button("⚖️ 3대 커뮤니티 통합 판결 실행", use_container_width=True):
-        if not f_name:
-            st.error("❗ 상품명을 입력해주세요.")
+    if st.button("⚖️ 통합 시세 판결 실행", use_container_width=True):
+        if not f_name or f_price == 0:
+            st.error("❗ 상품명과 가격을 모두 정확히 입력해주세요.")
         else:
-            with st.spinner('🏘️ 뽐뿌·루리웹·클리앙 시세를 분석 중입니다...'):
+            with st.spinner('🏘️ 3대 커뮤니티(뽐뿌, 루리웹, 클리앙) 기록을 분석 중입니다...'):
+                # 병렬 탐색 시뮬레이션
                 p_data = TripleCommunityEngine.search_ppomppu(f_name)
                 r_data = TripleCommunityEngine.search_ruliweb(f_name)
                 c_data = TripleCommunityEngine.search_clien(f_name)
@@ -134,19 +141,19 @@ def main():
             if all_prices:
                 low_price = all_prices[0]
                 st.markdown('<div class="result-box">', unsafe_allow_html=True)
-                st.subheader(f"📊 '{f_name}' 판결")
+                st.subheader(f"📊 '{f_name}' 시세 분석 결과")
                 c1, c2 = st.columns(2)
                 c1.metric("나의 확인가", f"{f_price:,}원")
                 c2.metric("역대 기록 최저가", f"{low_price:,}원")
                 
                 diff = f_price - low_price
                 if diff <= 0:
-                    st.success("🔥 **역대급 딜!** 기록된 최저가보다 저렴합니다. 즉시 탑승하세요!")
+                    st.success("🔥 **역대급 딜!** 기록된 시세보다 저렴합니다. 지금 사세요!")
                 else:
-                    st.error(f"💀 **참으세요!** 역대 최저가보다 {diff:,}원 더 비쌉니다.")
+                    st.error(f"💀 **주의!** 역대 기록보다 {diff:,}원 더 비쌉니다.")
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.warning("⚠️ 커뮤니티에서 가격 정보를 찾지 못했습니다. 키워드를 더 단순하게 시도해보세요.")
+                st.warning("⚠️ 커뮤니티 기록을 찾지 못했습니다. 키워드에 쉼표를 사용해 다시 시도해보세요 (예: 아이폰, 15).")
 
 if __name__ == "__main__":
     main()
