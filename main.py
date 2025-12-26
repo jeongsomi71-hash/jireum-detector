@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -8,31 +7,12 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 및 데이터 통합 엔진
+# 1. 시세 분석 엔진 (강력한 수집 로직 원복)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
     def get_mobile_headers():
         return {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
-
-    @staticmethod
-    def parse_item_robust(soup_item, site_type):
-        try:
-            full_text = soup_item.get_text(strip=True)
-            comment_match = re.search(r'\[(\d+)\]$', full_text)
-            comment_count = int(comment_match.group(1)) if comment_match else 0
-            title = re.sub(r'\[\d+\]$', '', full_text).strip()
-            
-            date_text = datetime.now().strftime('%y/%m/%d')
-            if site_type == "뽐뿌":
-                info_node = soup_item.find_next('span', class_='hi')
-                if info_node:
-                    date_match = re.search(r'\d{2}/\d{2}/\d{2}', info_node.get_text())
-                    if date_match: date_text = date_match.group(0)
-            
-            return {"title": title, "comments": comment_count, "date": date_text}
-        except:
-            return None
 
     @staticmethod
     def search_all(product_name):
@@ -46,11 +26,30 @@ class AdvancedSearchEngine:
             try:
                 res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
                 soup = BeautifulSoup(res.text, 'html.parser')
-                selector = '.title' if name == "뽐뿌" else '.list_subject .subject_fixed'
-                items = soup.select(selector)
+                # 기존의 넓은 범위 수집 로직으로 원복
+                if name == "뽐뿌":
+                    items = soup.select('.title, .content') 
+                else:
+                    items = soup.select('.list_subject .subject_fixed, .subject_fixed')
+                
                 for item in items:
-                    parsed = AdvancedSearchEngine.parse_item_robust(item, name)
-                    if parsed: all_data.append(parsed)
+                    raw_text = item.get_text(strip=True)
+                    if not raw_text: continue
+                    
+                    # [표시 개선 요청 반영] 댓글 수 분리 및 닉네임 제거 로직
+                    comment_match = re.search(r'\[(\d+)\]$', raw_text)
+                    comment_count = int(comment_match.group(1)) if comment_match else 0
+                    pure_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
+                    
+                    # 일자 추출
+                    date_text = datetime.now().strftime('%y/%m/%d')
+                    if name == "뽐뿌":
+                        info = item.find_next('span', class_='hi')
+                        if info:
+                            d_match = re.search(r'\d{2}/\d{2}/\d{2}', info.get_text())
+                            if d_match: date_text = d_match.group(0)
+
+                    all_data.append({"title": pure_title, "comments": comment_count, "date": date_text})
             except: continue
         return all_data
 
@@ -69,7 +68,8 @@ class AdvancedSearchEngine:
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
         total_excludes = base_excludes + [x.strip() for x in user_excludes.split(',') if x.strip()]
         exclude_pattern = re.compile('|'.join(map(re.escape, total_excludes)))
-        price_pattern = re.compile(r'([0-9,]{4,10})\s?(원|만)')
+        # 기존의 광범위한 가격 추출 정규식 원복
+        price_pattern = re.compile(r'([0-9,]{1,10})\s?(원|만)')
         
         categorized = {}
         for item in items:
@@ -100,7 +100,7 @@ class AdvancedSearchEngine:
 # 2. UI 및 로직 통합
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v3.6", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v3.7", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -125,7 +125,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.6</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.7</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.s_name)
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.s_price)
@@ -136,7 +136,7 @@ def main():
         if st.button("🔍 시세 판독 실행"):
             if in_name:
                 st.session_state.s_name, st.session_state.s_price = in_name, in_price
-                with st.spinner('🏘️ 통합 분석 중...'):
+                with st.spinner('🏘️ 광범위 시세 데이터 분석 중...'):
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_exclude)
                     summ = AdvancedSearchEngine.summarize_sentiment(raw)
@@ -164,7 +164,7 @@ def main():
             <div class="detail-card">
                 <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {("높음" if score>=10 else "보통")} (점수: {score:.1f})</span><br>
                 <span class="price-highlight">{best['price']:,}원</span>
-                <span class="core-title">{best['title'][:40]}...</span>
+                <span class="core-title">{best['title'][:45]}...</span>
                 <div class="meta-info">
                     <span>📅 {best['date']}</span>
                     <span>💬 댓글 <span class="badge">{best['comments']}</span></span>
@@ -192,8 +192,7 @@ def main():
                 st.session_state.s_name, st.session_state.s_price = h['name'], h['user_price']
                 st.rerun()
 
-    # 최하단 버전 표시 (v3.6 최종 복구)
-    st.markdown('<div class="version-footer">Version: v3.6 - Integrated Analysis & Privacy Shield</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-footer">Version: v3.7 - Restored Engine & UI Enhanced</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
