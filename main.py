@@ -5,57 +5,75 @@ import re
 import urllib.parse
 from PIL import Image, ImageOps, ImageFilter
 import pytesseract
+import time
 
 # ==========================================
-# 1. 커뮤니티 직접 탐색 엔진 (뽐뿌, 루리웹, 클리앙)
+# 1. 고성능 커뮤니티 직접 탐색 엔진 (모바일 우회)
 # ==========================================
-class DirectCommunityEngine:
+class MobileDirectEngine:
     @staticmethod
-    def get_headers():
+    def get_mobile_headers():
+        # 모바일 브라우저(iPhone)로 완벽하게 위장하여 자바스크립트 검사를 우회합니다.
         return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+            "Referer": "https://m.ppomppu.co.kr/"
         }
 
     @staticmethod
     def search_ppomppu(product_name):
-        """뽐뿌 게시판 직접 검색"""
-        query = urllib.parse.quote(product_name, encoding='euc-kr') # 뽐뿌는 euc-kr 사용 주의
-        url = f"https://www.ppomppu.co.kr/zboard/zboard.php?id=ppomppu&keyword={query}"
+        """뽐뿌 모바일 페이지 직접 검색"""
+        # 모바일 뽐뿌는 UTF-8을 지원하므로 인코딩 문제가 적습니다.
+        query = urllib.parse.quote(product_name)
+        url = f"https://m.ppomppu.co.kr/new/bbs_list.php?id=ppomppu&search_type=sub_memo&keyword={query}"
+        
         try:
-            res = requests.get(url, headers=DirectCommunityEngine.get_headers(), timeout=5)
-            soup = BeautifulSoup(res.content, 'html.parser', from_encoding='euc-kr')
-            # 게시글 제목 영역 추출
-            titles = soup.find_all('font', class_='list_title')
-            return [t.get_text() for t in titles]
-        except: return []
+            res = requests.get(url, headers=MobileDirectEngine.get_mobile_headers(), timeout=10)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            
+            # 모바일 뽐뿌의 게시글 제목 클래스 추출
+            titles = soup.select('.title')
+            return [t.get_text(strip=True) for t in titles]
+        except:
+            return []
 
     @staticmethod
     def search_ruliweb(product_name):
-        """루리웹 핫딜 게시판 직접 검색"""
+        """루리웹 모바일 핫딜 게시판 직접 검색"""
         query = urllib.parse.quote(product_name)
-        url = f"https://bbs.ruliweb.com/market/board/1020?search_type=subject&search_key={query}"
+        url = f"https://m.bbs.ruliweb.com/market/board/1020?search_type=subject&search_key={query}"
+        
         try:
-            res = requests.get(url, headers=DirectCommunityEngine.get_headers(), timeout=5)
+            res = requests.get(url, headers=MobileDirectEngine.get_mobile_headers(), timeout=10)
             soup = BeautifulSoup(res.text, 'html.parser')
-            titles = soup.find_all('a', class_='subject_inner_text')
-            return [t.get_text() for t in titles]
-        except: return []
+            
+            # 루리웹 모바일 제목 추출
+            titles = soup.select('.subject_inner_text, .subject')
+            return [t.get_text(strip=True) for t in titles]
+        except:
+            return []
 
     @staticmethod
-    def extract_prices(text_list):
-        """수집된 제목 리스트에서 가격 패턴 추출"""
+    def extract_lowest_price(texts):
+        """수집된 텍스트 중 가장 낮은 가격(역대 최저가 후보) 추출"""
         prices = []
+        # 숫자와 '원' 또는 '만'이 붙은 패턴 탐색
         pattern = re.compile(r'([0-9,]{2,10})\s?(원|만)')
-        for text in text_list:
+        
+        for text in texts:
             found = pattern.findall(text)
             for f_val, unit in found:
                 num = int(f_val.replace(',', ''))
                 if unit == '만': num *= 10000
-                if 10000 < num < 20000000: prices.append(num)
-        return sorted(prices)
+                # 1만원 미만이나 1000만원 이상은 노이즈로 간주
+                if 10000 < num < 10000000:
+                    prices.append(num)
+        
+        return min(prices) if prices else None
 
 # ==========================================
-# 2. UI 스타일 및 리셋 (기존 원칙 유지)
+# 2. UI 및 로직 통합
 # ==========================================
 def apply_custom_style():
     st.set_page_config(page_title="지름신 판독기 PRO", layout="centered")
@@ -66,62 +84,49 @@ def apply_custom_style():
         html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; background-color: #000000 !important; color: #FFFFFF !important; }
         .unified-header { background-color: #FFFFFF; color: #000000 !important; text-align: center; font-size: 1.8rem; font-weight: 900; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 4px solid #00FF88; }
         .result-box { border: 2px solid #00FF88; padding: 25px; border-radius: 15px; margin-top: 20px; background-color: #0A0A0A; }
-        .stat-value { font-size: 1.5rem; font-weight: 700; color: #00FF88; }
         </style>
         """, unsafe_allow_html=True)
 
 def main():
     apply_custom_style()
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기</div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO</div>', unsafe_allow_html=True)
     
-    if st.button("🔄 리셋", use_container_width=True):
-        for key in st.session_state.keys(): del st.session_state[key]
+    if st.button("🔄 검색 초기화"):
         st.rerun()
 
-    tabs = ["📸 이미지 판결", "✍️ 직접 상품명 입력"]
-    sel_tab = st.radio("📥 판독 방식", tabs, horizontal=True)
+    f_name = st.text_input("📦 판독할 상품명", placeholder="예: 아이폰 15 프로")
+    f_price_raw = st.text_input("💰 현재 내가 본 가격", placeholder="숫자만 입력")
 
-    f_name, f_price = "", 0
-
-    if sel_tab == "📸 이미지 판결":
-        file = st.file_uploader("이미지 업로드", type=['png', 'jpg', 'jpeg'])
-        if file:
-            img = Image.open(file)
-            st.image(img, use_container_width=True)
-            proc = ImageOps.grayscale(img).filter(ImageFilter.SHARPEN)
-            text_raw = pytesseract.image_to_string(proc, lang='kor+eng', config='--psm 6')
-            lines = [l.strip() for l in text_raw.split('\n') if len(l.strip()) > 2]
-            f_name = lines[0] if lines else ""
-    else:
-        f_name = st.text_input("📦 상품명", placeholder="예: 아이폰 15")
-        p_val = st.text_input("💰 현재 확인 가격", placeholder="숫자만 입력")
-        if f_name and p_val: f_price = int(re.sub(r'[^0-9]', '', p_val))
-
-    if st.button("⚖️ 커뮤니티 직접 탐색 판결 실행", use_container_width=True):
-        if not f_name:
-            st.error("❗ 상품명을 입력해주세요.")
+    if st.button("🔍 커뮤니티 역대 시세 분석", use_container_width=True):
+        if not f_name or not f_price_raw:
+            st.error("❗ 상품명과 가격을 모두 입력해주세요.")
         else:
-            with st.spinner('🏘️ 커뮤니티 직접 탐색 중...'):
-                # 뽐뿌 & 루리웹 데이터 수집
-                p_titles = DirectCommunityEngine.search_ppomppu(f_name)
-                r_titles = DirectCommunityEngine.search_ruliweb(f_name)
-                all_prices = DirectCommunityEngine.extract_prices(p_titles + r_titles)
+            f_price = int(re.sub(r'[^0-9]', '', f_price_raw))
             
-            if all_prices:
-                low_price = all_prices[0]
-                st.markdown('<div class="result-box">', unsafe_allow_html=True)
-                st.subheader(f"📊 '{f_name}' 판결")
-                c1, c2 = st.columns(2)
-                c1.metric("나의 확인가", f"{f_price:,}원")
-                c2.metric("커뮤니티 최저가", f"{low_price:,}원")
+            with st.spinner('📱 모바일 우회 채널로 커뮤니티 데이터를 긁어오는 중...'):
+                # 뽐뿌 모바일 & 루리웹 모바일 동시 타격
+                p_data = MobileDirectEngine.search_ppomppu(f_name)
+                r_data = MobileDirectEngine.search_ruliweb(f_name)
                 
-                if f_price <= low_price:
-                    st.success("🔥 역대급 딜! 커뮤니티 가격보다 저렴합니다.")
+                low_price = MobileDirectEngine.extract_lowest_price(p_data + r_data)
+
+            if low_price:
+                st.markdown('<div class="result-box">', unsafe_allow_html=True)
+                st.subheader(f"📊 판결: {f_name}")
+                col1, col2 = st.columns(2)
+                col1.metric("현재 나의 가격", f"{f_price:,}원")
+                col2.metric("역대 최저가 기록", f"{low_price:,}원")
+                
+                diff = f_price - low_price
+                if diff <= 0:
+                    st.success(f"✅ **와우! 역대급입니다.** 기록된 최저가보다 저렴하거나 같습니다. 무조건 사세요!")
+                elif diff < (low_price * 0.05):
+                    st.warning(f"🤔 **나쁘지 않네요.** 최저가와 약 {diff:,}원 차이입니다. 급하시면 사세요.")
                 else:
-                    st.error(f"💀 주의! 커뮤니티 시세보다 {f_price - low_price:,}원 비쌉니다.")
+                    st.error(f"❌ **참으세요!** 역대 시세보다 {diff:,}원 더 비쌉니다. 존버를 추천합니다.")
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.warning("⚠️ 커뮤니티에서 해당 제품의 가격 정보를 찾지 못했습니다. 상품명을 더 단순하게 입력해 보세요.")
+                st.warning("⚠️ 커뮤니티 기록을 찾지 못했습니다. 상품명을 더 정확하거나 짧게 입력해보세요 (예: 아이폰15).")
 
 if __name__ == "__main__":
     main()
