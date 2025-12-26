@@ -40,10 +40,10 @@ class AdvancedSearchEngine:
         return all_titles
 
 # ==========================================
-# 2. UI 및 스타일링 (v1.2 가독성 강화)
+# 2. UI 및 스타일링 (v1.3 수정 반영)
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v1.2", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v1.3", layout="centered")
     st.markdown("""
         <style>
         .block-container { max-width: 550px !important; padding-top: 1.5rem !important; }
@@ -52,8 +52,12 @@ def apply_style():
         .version-tag { font-size: 0.8rem; vertical-align: middle; color: #666; margin-left: 10px; }
         .detail-card { border: 2px solid #00FF88; padding: 20px; border-radius: 12px; margin-top: 20px; background-color: #0A0A0A; text-align: center; }
         
-        /* [개선] 최저가 글자 색상 및 크기 강조 */
+        /* 최저가 강조 */
         .price-highlight { color: #00FF88 !important; font-size: 2.2rem !important; font-weight: 900 !important; text-shadow: 2px 2px 4px rgba(0,255,136,0.3); margin: 10px 0; display: block; }
+        
+        /* [수정] 커뮤니티 링크 버튼: 텍스트 흰색 */
+        .link-btn-box { background:#111; color:#FFFFFF !important; padding:10px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid #00FF88; transition: 0.3s; }
+        .link-btn-box:hover { background: #1a1a1a; border-color: #FFFFFF; }
         
         .history-item { border-left: 3px solid #00FF88; padding: 8px 12px; margin-bottom: 5px; background: #111; font-size: 0.85rem; border-radius: 0 5px 5px 0; }
         .stButton>button { width: 100%; border: 2px solid #00FF88; background-color: #000; color: #00FF88; font-weight: bold; height: 3.5rem; font-size: 1.1rem; }
@@ -63,11 +67,10 @@ def apply_style():
 def main():
     apply_style()
     
-    # 세션 상태 초기화 (이력 저장용)
     if 'history' not in st.session_state:
         st.session_state.history = []
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span class="version-tag">v1.2</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span class="version-tag">v1.3</span></div>', unsafe_allow_html=True)
 
     with st.form(key='search_form', clear_on_submit=False):
         f_name = st.text_input("📦 제품명 (예: 갤럭시 S24, 턴 버지 P10)")
@@ -78,7 +81,6 @@ def main():
         reset_button = cols[1].form_submit_button(label='🔄 리셋')
 
     if reset_button:
-        # 이력은 유지하되 입력창과 현재 결과만 초기화
         st.rerun()
 
     if submit_button:
@@ -108,7 +110,6 @@ def main():
                 elif count >= 3: rel_text, rel_color = "🟡 신뢰도 중간", "#FFD700"
                 else: rel_text, rel_color = "🔴 신뢰도 낮음", "#FF4B4B"
 
-                # [개선] 결과 카드 내 최저가 가독성 강화
                 st.markdown(f"### <span style='color:{rel_color}'>{rel_text}</span>", unsafe_allow_html=True)
                 st.markdown(f'''
                 <div class="detail-card">
@@ -118,25 +119,29 @@ def main():
                 </div>
                 ''', unsafe_allow_html=True)
 
-                # 조회 이력 추가 (최근 10개 유지)
+                # 이력 추가
                 now = datetime.now().strftime("%H:%M:%S")
                 history_entry = f"[{now}] {f_name} → {low_price:,}원 ({rel_text})"
                 st.session_state.history.insert(0, history_entry)
                 st.session_state.history = st.session_state.history[:10]
 
-                # 커뮤니티 링크
+                # 커뮤니티 링크 (글자색 흰색 수정 반영)
                 st.write("")
                 st.write("🔗 **실시간 검색 결과 확인**")
                 links = AdvancedSearchEngine.get_search_links(f_name)
                 l_cols = st.columns(3)
                 for i, (site, url) in enumerate(links.items()):
-                    l_cols[i].markdown(f'<a href="{url}" target="_blank" style="text-decoration:none;"><div style="background:#111; color:#00FF88; padding:10px; border-radius:8px; text-align:center; font-size:0.8rem; border:1px solid #00FF88;">{site}</div></a>', unsafe_allow_html=True)
+                    l_cols[i].markdown(f'''
+                        <a href="{url}" target="_blank" style="text-decoration:none;">
+                            <div class="link-btn-box">{site}</div>
+                        </a>
+                    ''', unsafe_allow_html=True)
                 
-                st.markdown('<div style="color:#FF4B4B; font-size:0.8rem; margin-top:30px; text-align:center;">⚠️ 최근 1년 내 최저가로 추정되지만 부정확할 수 있어요.</div>', unsafe_allow_html=True)
+                # [수정] 요청하신 문구로 변경
+                st.markdown('<div style="color:#FF4B4B; font-size:0.8rem; margin-top:30px; text-align:center;">⚠️ 최근 1년 내 낮은 가격들의 평균가로 추정되지만 부정확할 수 있어요.</div>', unsafe_allow_html=True)
             else:
                 st.warning("⚠️ 검색 결과가 없습니다.")
 
-    # [신규] 과거 조회 이력 표시 (하단 섹션)
     if st.session_state.history:
         st.write("---")
         st.subheader("📜 최근 조회 이력 (Top 10)")
@@ -146,4 +151,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# Version: v1.2 - History Log (10) & Enhanced Price Visibility
+# Version: v1.3 - White Link Text & Custom Disclaimer
