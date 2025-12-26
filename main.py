@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 엔진 (강력 수집 유지 + 키워드 정제 강화)
+# 1. 시세 분석 엔진 (강력 수집 원복 + 정밀 필터링)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -15,23 +15,14 @@ class AdvancedSearchEngine:
         return {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
 
     @staticmethod
-    def extract_pure_product_name(text):
-        """닉네임 및 수식어를 제거하고 상품의 핵심 특징만 추출 (v3.9 핵심 로직)"""
-        # 1. 닉네임/게시판 정보가 섞인 뒷부분 과감히 절단 (공백 2칸 이상 혹은 특수구분자)
-        clean_text = re.split(r'\s{2,}|/| - |\|', text)[0]
-        
-        # 2. 대괄호, 중괄호 등 수식어 제거
-        clean_text = re.sub(r'\[.*?\]|\(.*?\)|\{.*?\}', '', clean_text)
-        
-        # 3. 특수문자 및 감탄사 제거
-        clean_text = re.sub(r'[\!\?\★\☆\■\●\▼\▲\▶]', '', clean_text)
-        
-        # 4. 가격 정보(숫자+원/만)가 제목에 포함된 경우 제거
-        clean_text = re.sub(r'\d+[원만]', '', clean_text)
-        
-        # 5. 너무 긴 경우 핵심 단어 6~7개만 유지 (닉네임 침범 방지)
-        words = clean_text.split()
-        return " ".join(words[:7]).strip()
+    def clean_only_nickname(text):
+        """상품 정보는 남기고 닉네임 영역만 정밀하게 제거 (v4.0 교정)"""
+        # 닉네임 앞에 흔히 붙는 구분자나 공백 패턴만 제거
+        # 제목의 뒷부분에 위치한 닉네임 추정 패턴 제거
+        clean = re.split(r'\s{3,}| \| | / ', text)[0]
+        # 이메일이나 아이디 패턴만 선택적 제거
+        clean = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', clean)
+        return clean.strip()
 
     @staticmethod
     def search_all(product_name):
@@ -45,20 +36,26 @@ class AdvancedSearchEngine:
             try:
                 res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
                 soup = BeautifulSoup(res.text, 'html.parser')
-                # 광범위 수집 엔진 유지
-                items = soup.select('.title, .content') if name == "뽐뿌" else soup.select('.list_subject .subject_fixed, .subject_fixed')
+                
+                # [수집 엔진 원복] 가장 많은 결과를 가져오던 선택자 유지
+                if name == "뽐뿌":
+                    items = soup.select('.title, .content')
+                else:
+                    items = soup.select('.list_subject .subject_fixed, .subject_fixed, .subject')
                 
                 for item in items:
                     raw_text = item.get_text(strip=True)
-                    if not raw_text: continue
+                    if not raw_text or len(raw_text) < 5: continue
                     
+                    # 댓글 수 보존
                     comment_match = re.search(r'\[(\d+)\]$', raw_text)
                     comment_count = int(comment_match.group(1)) if comment_match else 0
                     
-                    # 제목 정제 (핵심 키워드 방식)
-                    raw_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
-                    pure_title = AdvancedSearchEngine.extract_pure_product_name(raw_title)
+                    # 제목 정제 (필요한 정보는 유지하되 닉네임만 소독)
+                    temp_title = re.sub(r'\[\d+\]$', '', raw_text).strip()
+                    pure_title = AdvancedSearchEngine.clean_only_nickname(temp_title)
                     
+                    # 일자 추출
                     date_text = datetime.now().strftime('%y/%m/%d')
                     if name == "뽐뿌":
                         info = item.find_next('span', class_='hi')
@@ -85,6 +82,8 @@ class AdvancedSearchEngine:
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
         total_excludes = base_excludes + [x.strip() for x in user_excludes.split(',') if x.strip()]
         exclude_pattern = re.compile('|'.join(map(re.escape, total_excludes)))
+        
+        # [가격 추출 로직 원복] 가장 유연한 정규식 사용
         price_pattern = re.compile(r'([0-9,]{1,10})\s?(원|만)')
         
         categorized = {}
@@ -96,7 +95,7 @@ class AdvancedSearchEngine:
             
             num = int(found[0][0].replace(',', ''))
             if found[0][1] == '만': num *= 10000
-            if num < 10000: continue 
+            if num < 5000: continue # 너무 낮은 가격(배송비 등) 필터링
 
             t_low = text.lower()
             spec_tag = "기본"
@@ -104,7 +103,6 @@ class AdvancedSearchEngine:
             elif any(k in t_low for k in ["6인용", "6인"]): spec_tag = "6인용"
             if "256" in t_low: spec_tag += " 256G"
             elif "512" in t_low: spec_tag += " 512G"
-            elif "울트라" in t_low or "ultra" in t_low: spec_tag += " Ultra"
 
             if spec_tag not in categorized: categorized[spec_tag] = []
             categorized[spec_tag].append({
@@ -116,7 +114,7 @@ class AdvancedSearchEngine:
 # 2. UI 및 로직 통합
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v3.9", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v4.0", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -124,12 +122,9 @@ def apply_style():
         .unified-header { background-color: #FFFFFF !important; color: #000000 !important; text-align: center; font-size: 1.6rem; font-weight: 900; padding: 15px; border-radius: 12px; margin-bottom: 25px; border: 4px solid #00FF88; }
         .detail-card { border: 2px solid #00FF88 !important; padding: 20px; border-radius: 12px; margin-top: 15px; background-color: #1A1A1A !important; }
         .price-highlight { color: #00FF88 !important; font-size: 2.2rem !important; font-weight: 900 !important; float: right; }
-        .core-title { color: white; font-weight: 900; font-size: 1.15rem; display: block; width: 70%; line-height: 1.3; }
+        .core-title { color: white; font-weight: 900; font-size: 1.1rem; display: block; width: 70%; line-height: 1.3; }
         .meta-info { color: #888888; font-size: 0.8rem; margin-top: 10px; display: flex; gap: 12px; }
         .badge { background: #333; padding: 2px 8px; border-radius: 4px; color: #00FF88; font-weight: bold; }
-        .judgment-box { padding: 10px; border-radius: 8px; font-weight: 900; text-align: center; margin-top: 10px; font-size: 1.1rem; }
-        .stButton>button { width: 100%; border: 2px solid #00FF88 !important; background-color: #000000 !important; color: #00FF88 !important; font-weight: bold !important; height: 3.5rem; }
-        .link-btn { background-color: #1A1A1A !important; color: #00FF88 !important; padding: 10px; border-radius: 5px; text-align: center; font-size: 0.9rem; border: 1px solid #00FF88; text-decoration: none; display: block; margin-bottom: 5px; font-weight: bold; }
         .version-footer { text-align: center; color: #444444; font-size: 0.8rem; margin-top: 50px; font-weight: bold; }
         </style>
         """, unsafe_allow_html=True)
@@ -141,7 +136,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v3.9</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO <span style="font-size:0.8rem; color:#444;">v4.0</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.s_name)
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.s_price)
@@ -152,7 +147,7 @@ def main():
         if st.button("🔍 시세 판독 실행"):
             if in_name:
                 st.session_state.s_name, st.session_state.s_price = in_name, in_price
-                with st.spinner('🏘️ 정밀 키워드 분석 중...'):
+                with st.spinner('🏘️ 강력한 엔진으로 데이터 복구 중...'):
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_exclude)
                     summ = AdvancedSearchEngine.summarize_sentiment(raw)
@@ -163,7 +158,7 @@ def main():
                     st.rerun()
     with c2:
         if st.button("🔄 리셋"):
-            st.session_state.s_name, st.session_state.s_price, st.session_state.current_data = "", "", None
+            st.session_state.s_name, st.session_state.s_price, st.session_state.current_data = None, "", None
             st.rerun()
 
     if st.session_state.current_data:
@@ -174,15 +169,13 @@ def main():
             best = items[0]
             avg_c = sum(i['comments'] for i in items) / len(items)
             score = len(items) * 1.5 + avg_c
-            if score >= 12: rel_txt, rel_col = "높음", "#00FF88"
-            elif score >= 7: rel_txt, rel_col = "보통", "#FFD700"
-            else: rel_txt, rel_col = "낮음", "#FF5555"
+            rel_txt, rel_col = ("높음", "#00FF88") if score >= 10 else ("보통", "#FFD700") if score >= 5 else ("낮음", "#FF5555")
 
             st.markdown(f'''
             <div class="detail-card">
                 <span style="color:{rel_col}; font-weight:bold; font-size:0.8rem;">신뢰도: {rel_txt} (관심도: {score:.1f})</span><br>
                 <span class="price-highlight">{best['price']:,}원</span>
-                <span class="core-title">{best['title']}</span>
+                <span class="core-title">{best['title'][:60]}</span>
                 <div class="meta-info">
                     <span>📅 {best['date']}</span>
                     <span>💬 댓글 <span class="badge">{best['comments']}</span></span>
@@ -191,25 +184,15 @@ def main():
             </div>
             ''', unsafe_allow_html=True)
             
-            if d['user_price'].isdigit():
-                diff = int(d['user_price']) - best['price']
-                if diff <= 0: st.markdown('<div class="judgment-box" style="background:#004d40; color:#00FF88;">✅ 즉시 지르세요!</div>', unsafe_allow_html=True)
-                else: st.markdown(f'<div class="judgment-box" style="background:#4d0000; color:#FF5555;">❌ 최저가 대비 {diff:,}원 비쌈</div>', unsafe_allow_html=True)
-
-        eq = urllib.parse.quote(d['name'])
-        cl1, cl2 = st.columns(2)
-        cl1.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={eq}&category=1" class="link-btn">뽐뿌 확인</a>', unsafe_allow_html=True)
-        cl2.markdown(f'<a href="https://www.clien.net/service/search?q={eq}" class="link-btn">클리앙 확인</a>', unsafe_allow_html=True)
-
     if st.session_state.history:
         st.write("---")
-        st.subheader("📜 최근 판독 이력 (10개)")
+        st.subheader("📜 최근 판독 이력")
         for idx, h in enumerate(st.session_state.history[:10]):
             if st.button(f"[{h['time']}] {h['name']}", key=f"hi_{idx}"):
                 st.session_state.current_data = h
                 st.session_state.s_name, st.session_state.s_price = h['name'], h['user_price']
                 st.rerun()
 
-    st.markdown('<div class="version-footer">Version: v3.9 - Core Keyword Logic & Full Engine Maintained</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-footer">Version: v4.0 - Search Engine Restored & Privacy Guard</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
