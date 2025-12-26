@@ -6,7 +6,7 @@ import urllib.parse
 from datetime import datetime
 
 # ==========================================
-# 1. 시세 분석 엔진 (태그 레벨 분리 로직)
+# 1. 시세 분석 엔진 (형제 노드 탐색 로직)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -27,38 +27,43 @@ class AdvancedSearchEngine:
                 soup = BeautifulSoup(res.text, 'html.parser')
                 
                 if name == "뽐뿌":
+                    # 뽐뿌 모바일 검색 결과는 .title 태그와 .comment_count 태그가 나란히 존재함
                     items = soup.select('.title')
                     for item in items:
-                        # [1] 댓글수 전용 태그 찾기 (보통 .list_comment 또는 제목 끝 span)
-                        c_tag = item.select_one('span.list_comment, em')
+                        # [1] 제목 추출 (닉네임 등 불필요 태그 제거)
+                        for extra in item.find_all(['span', 'em', 'font']):
+                            extra.decompose()
+                        p_title = item.get_text(strip=True)
+                        
+                        # [2] 댓글수 추출 (제목 태그의 형제 노드 혹은 부모 컨테이너 내부 탐색)
+                        # 뽐뿌 구조에 따라 title 주위의 모든 숫자를 탐색
+                        parent = item.find_parent()
+                        c_tag = parent.select_one('.comment_count, .comment, em') if parent else None
                         c_count = 0
                         if c_tag:
-                            c_text = c_tag.get_text(strip=True)
-                            nums = re.findall(r'\d+', c_text)
+                            nums = re.findall(r'\d+', c_tag.get_text())
                             c_count = int(nums[0]) if nums else 0
-                            c_tag.decompose() # 제목에서 댓글 태그 물리적 삭제
                         
-                        # [2] 닉네임 및 기타 불필요 태그 제거
-                        for extra in item.find_all(['span', 'em', 'font']):
-                            extra.decompose() 
+                        # 제목 끝에 혹시라도 [숫자]가 붙어 있다면 마지막으로 제거
+                        p_title = re.sub(r'\[\d+\]$', '', p_title).strip()
                         
-                        # [3] 깨끗해진 제목 추출
-                        p_title = item.get_text(strip=True)
-                        if not p_title: continue
-                        
-                        all_data.append({"title": p_title, "comments": c_count})
+                        if p_title:
+                            all_data.append({"title": p_title, "comments": c_count})
                 
                 else: # 클리앙
-                    items = soup.select('.list_subject')
+                    items = soup.select('.list_item')
                     for item in items:
-                        # 클리앙 댓글수 태그 분리
-                        c_tag = item.select_one('.r_count, .r_count_new')
+                        title_tag = item.select_one('.subject_fixed')
+                        if not title_tag: continue
+                        
+                        p_title = title_tag.get_text(strip=True)
+                        c_tag = item.select_one('.r_count')
                         c_count = 0
                         if c_tag:
-                            c_count = int(re.findall(r'\d+', c_tag.get_text())[0])
-                            c_tag.decompose()
-                            
-                        p_title = item.select_one('.subject_fixed').get_text(strip=True)
+                            nums = re.findall(r'\d+', c_tag.get_text())
+                            c_count = int(nums[0]) if nums else 0
+                        
+                        p_title = re.sub(r'\[\d+\]$', '', p_title).strip()
                         all_data.append({"title": p_title, "comments": c_count})
             except: continue
         return all_data
@@ -108,7 +113,7 @@ class AdvancedSearchEngine:
 # 2. UI 및 메인 로직
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v5.0", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v5.1", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -133,7 +138,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v5.0</div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v5.1</div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.s_name)
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.s_price)
@@ -198,6 +203,6 @@ def main():
                 st.session_state.s_name, st.session_state.s_price = h['name'], h['user_price']
                 st.rerun()
 
-    st.markdown('<div class="version-footer">Version: v5.0 - Tag-based Comment Isolation Verified</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-footer">Version: v5.1 - Sibling Tag Matching Verified</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
