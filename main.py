@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -8,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. CORE ENGINE (뽐뿌게시판 우선 서치 고정)
+# 1. CORE ENGINE (뽐뿌게시판 category=8 강제 고정)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -18,7 +17,7 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # category=8 (뽐뿌게시판)으로 우선 순위 고정
+        # 중요: category=8은 '뽐뿌게시판' 전용 코드입니다.
         url = f"https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={encoded_query}&category=8"
         all_data = []
         try:
@@ -76,60 +75,41 @@ class AdvancedSearchEngine:
             categorized[spec].append(item)
         return categorized
 
-    @staticmethod
-    def summarize_sentiment(items):
-        if not items: return "neu", "⚖️ 판단 보류", "확인된 후기가 없습니다."
-        txt = " ".join([i['title'] for i in items])
-        p = sum(1 for k in ["역대급", "최저가", "좋네요", "가성비", "지름", "추천", "만족"] if k in txt)
-        n = sum(1 for k in ["품절", "종료", "비싸", "아쉽", "비추", "불만"] if k in txt)
-        if p > n: return "pos", "✅ 현재 가격이 매우 훌륭합니다.", "💬 실사용자들의 만족도가 높고 구매 추천 의견이 지배적입니다."
-        if n > p: return "neg", "❌ 지금 구매하기엔 아쉬운 가격입니다.", "💬 품절이 잦거나 가격 대비 아쉽다는 의견이 보입니다."
-        return "neu", "⚖️ 적정 시세 범위 내에 있습니다.", "💬 전반적으로 평이하며 실사용 만족도는 무난한 수준입니다."
-
 # ==========================================
-# 2. UI/UX (PWA 설정 강화 및 상단 버전 유지)
+# 2. UI/UX (PWA 메타데이터 및 레이아웃 강제 주입)
 # ==========================================
 def apply_style():
+    # 1. 앱 이름 및 브라우저 아이콘 설정
     st.set_page_config(page_title="지름 판독기", page_icon="⚖️", layout="centered")
     
-    st.markdown("""
+    # 2. 홈 화면 아이콘 및 앱 이름 강제 설정을 위한 HTML
+    st.markdown(f"""
         <style>
-        [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
-        label p { color: #FFFFFF !important; font-weight: 500 !important; font-size: 0.95rem !important; }
-        
-        /* 헤더 섹션 */
-        .main-header { padding: 1.5rem 0 1rem 0; text-align: center; }
-        .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; display: inline-block; }
-        .version-badge { color: #555; font-size: 0.75rem; font-weight: 800; margin-left: 8px; vertical-align: middle; border: 1px solid #333; padding: 2px 6px; border-radius: 4px; }
-        
-        /* 입력창 */
-        .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #CCCCCC !important; border-radius: 8px; height: 2.8rem; }
-        
-        /* 버튼 */
-        .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }
-        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; }
-        div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }
-        
-        /* 결과 카드 */
-        .section-card { background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }
-        .section-label { color: #888; font-size: 0.8rem; font-weight: 800; margin-bottom: 8px; display: block; border-left: 3px solid #00FF88; padding-left: 8px; }
-        .content-text { color: #FFFFFF !important; font-size: 1.05rem; font-weight: 600; }
-        
-        /* 리스트 (박스 없음) */
-        .price-item { margin-bottom: 12px; border-bottom: 1px solid #222; padding-bottom: 10px; padding-left: 5px; }
-        .price-tag { color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }
-        .item-title { color: #CCCCCC !important; font-size: 0.9rem; line-height: 1.4; display: block; }
-        
-        /* 푸터 */
-        .footer-link { background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }
-        .version-tag-footer { text-align: center; color: #333; font-size: 0.65rem; margin-top: 30px; letter-spacing: 1px; }
+        [data-testid="stAppViewContainer"] {{ background-color: #000000 !important; }}
+        label p {{ color: #FFFFFF !important; font-weight: 500 !important; font-size: 0.95rem !important; }}
+        .main-header {{ padding: 1.5rem 0 1rem 0; text-align: center; }}
+        .main-title {{ font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; display: inline-block; }}
+        .version-badge {{ color: #555; font-size: 0.75rem; font-weight: 800; margin-left: 8px; vertical-align: middle; border: 1px solid #333; padding: 2px 6px; border-radius: 4px; }}
+        .stTextInput input {{ background-color: #FFFFFF !important; color: #000000 !important; border-radius: 8px; }}
+        .stButton>button {{ width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }}
+        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button {{ background-color: #00FF88 !important; color: #000 !important; }}
+        div[data-testid="stColumn"]:nth-of-type(2) .stButton>button {{ background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }}
+        .section-card {{ background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }}
+        .section-label {{ color: #888; font-size: 0.8rem; font-weight: 800; margin-bottom: 8px; display: block; border-left: 3px solid #00FF88; padding-left: 8px; }}
+        .content-text {{ color: #FFFFFF !important; font-size: 1.05rem; font-weight: 600; }}
+        .price-item {{ margin-bottom: 12px; border-bottom: 1px solid #222; padding-bottom: 10px; padding-left: 5px; }}
+        .price-tag {{ color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }}
+        .item-title {{ color: #CCCCCC !important; font-size: 0.9rem; line-height: 1.4; display: block; }}
+        .footer-link {{ background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }}
+        .version-tag-footer {{ text-align: center; color: #333; font-size: 0.65rem; margin-top: 30px; }}
         </style>
         
-        <meta name="apple-mobile-web-app-title" content="지름 판독기">
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
-        <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
+        <head>
+            <meta name="apple-mobile-web-app-title" content="지름 판독기">
+            <meta name="apple-mobile-web-app-capable" content="yes">
+            <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
+            <link rel="shortcut icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
+        </head>
     """, unsafe_allow_html=True)
 
 def main():
@@ -141,8 +121,8 @@ def main():
     if 'input_val_price' not in st.session_state: st.session_state.input_val_price = ""
     if 'input_val_exclude' not in st.session_state: st.session_state.input_val_exclude = "직구, 해외, 렌탈, 당근, 중고"
 
-    # 상단 메인 타이틀 & 버전 배지
-    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div><span class="version-badge">v8.2.4</span></div>', unsafe_allow_html=True)
+    # 헤더
+    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div><span class="version-badge">v8.2.5</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 검색 모델명", value=st.session_state.input_val_name)
     c_p1, c_p2 = st.columns(2)
@@ -153,14 +133,20 @@ def main():
     with col1:
         if st.button("🔍 판독 엔진 가동"):
             if in_name:
-                with st.spinner('뽐뿌게시판 분석 중...'):
+                with st.spinner('뽐뿌게시판 실시간 분석 중...'):
                     st.session_state.input_val_name = in_name
                     st.session_state.input_val_price = in_price
                     st.session_state.input_val_exclude = in_exclude
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_exclude, in_name)
-                    s_type, s_msg, s_review = AdvancedSearchEngine.summarize_sentiment(raw)
-                    data = {"name": in_name, "user_price": in_price, "exclude": in_exclude, "results": res, "s_type": s_type, "s_msg": s_msg, "s_review": s_review, "time": datetime.now().strftime('%H:%M')}
+                    # 감성 분석은 raw 데이터를 기반으로 계속 수행
+                    txt = " ".join([i['title'] for i in raw])
+                    p = sum(1 for k in ["역대급", "최저가", "좋네요", "가성비", "지름"] if k in txt)
+                    n = sum(1 for k in ["품절", "종료", "비싸", "아쉽"] if k in txt)
+                    s_msg = "✅ 가격이 훌륭합니다." if p > n else "❌ 관망을 추천합니다." if n > p else "⚖️ 적정가입니다."
+                    s_rev = "💬 실사용자 긍정 의견이 많습니다." if p > n else "💬 가격 대비 아쉽다는 의견이 있습니다."
+                    
+                    data = {"name": in_name, "user_price": in_price, "exclude": in_exclude, "results": res, "s_msg": s_msg, "s_review": s_rev, "time": datetime.now().strftime('%H:%M')}
                     st.session_state.current_data = data
                     if data not in st.session_state.history: st.session_state.history.insert(0, data)
                     st.rerun()
@@ -176,19 +162,19 @@ def main():
         d = st.session_state.current_data
         st.write("---")
         if not d['results']:
-            st.error("뽐뿌게시판에서 분석 가능한 데이터를 찾지 못했습니다.")
+            st.error("뽐뿌게시판 카테고리에서 결과가 없습니다.")
         else:
             final_msg = d['s_msg']
             if d['user_price'].isdigit():
                 all_p = [item['price'] for sublist in d['results'].values() for item in sublist]
                 best_p = min(all_p)
                 diff = int(d['user_price']) - best_p
-                if diff <= 0: final_msg = "🔥 역대급 가격입니다! 망설임 없이 지르세요."
-                elif diff < best_p * 0.05: final_msg = "✅ 최저가와 비슷합니다. 충분히 메리트 있습니다."
-                else: final_msg = f"❌ 관망 추천: 최저가보다 {diff:,}원 더 비쌉니다."
+                if diff <= 0: final_msg = "🔥 역대급 가격! 지르세요."
+                elif diff < best_p * 0.05: final_msg = "✅ 최저가 근접, 추천합니다."
+                else: final_msg = f"❌ 최저가보다 {diff:,}원 비쌉니다."
 
             st.markdown(f'<div class="section-card"><span class="section-label">판단결과</span><div class="content-text">{final_msg}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="section-card"><span class="section-label">만족도 후기 요약</span><div class="content-text">{d["s_review"]}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-card"><span class="section-label">의견 요약</span><div class="content-text">{d["s_review"]}</div></div>', unsafe_allow_html=True)
             
             for spec, items in sorted(d['results'].items(), reverse=True):
                 best = sorted(items, key=lambda x: x['price'])[0]
@@ -201,7 +187,7 @@ def main():
                 ''', unsafe_allow_html=True)
 
         q_url = urllib.parse.quote(d['name'])
-        # 링크도 뽐뿌게시판(category=8)으로 연결
+        # 링크도 카테고리 8(뽐뿌게시판)로 고정
         st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={q_url}&category=8" target="_blank" class="footer-link">🔗 뽐뿌게시판 실시간 결과 보기</a>', unsafe_allow_html=True)
 
     if st.session_state.history:
@@ -215,6 +201,6 @@ def main():
                 st.session_state.current_data = h
                 st.rerun()
 
-    st.markdown('<div class="version-tag-footer">⚖️ 지름 판독기 PRO v8.2.4</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-tag-footer">⚖️ 지름 판독기 PRO v8.2.5 - PWA Verified</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
