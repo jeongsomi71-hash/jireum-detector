@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 엔진 (사용기 고정 및 404 방지)
+# 1. 시세 분석 엔진 (정밀 검색 및 클리앙 고정)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -17,10 +17,10 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # 클리앙: '사용기(all_use)' 게시판 내부 검색 주소로 고정
+        # 클리앙: 통합검색이 아닌 '사용기' 게시판 직접 검색 경로 사용
         sites = {
             "뽐뿌": f"https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={encoded_query}&category=1",
-            "클리앙": f"https://www.clien.net/service/search?q={encoded_query}&boardName=all_use&sort=recency"
+            "클리앙": f"https://www.clien.net/service/board/all_use?sk=title&sv={encoded_query}"
         }
         all_data = []
         for name, url in sites.items():
@@ -36,8 +36,8 @@ class AdvancedSearchEngine:
                         p_title = item.get_text(strip=True)
                         p_title = re.sub(r'[\(\[]\d+[\)\]]$', '', p_title).strip()
                         if p_title: all_data.append({"title": p_title})
-                else: # 클리앙 (사용기 게시판 내 검색 결과 추출)
-                    items = soup.select('.list_item .subject_fixed')
+                else: # 클리앙 (사용기 게시판 구조 대응)
+                    items = soup.select('.list_subject .subject_fixed')
                     for item in items:
                         p_title = item.get_text(strip=True)
                         p_title = re.sub(r'[\(\[]\d+[\)\]]$', '', p_title).strip()
@@ -46,7 +46,10 @@ class AdvancedSearchEngine:
         return all_data
 
     @staticmethod
-    def categorize_deals(items, user_excludes):
+    def categorize_deals(items, user_excludes, search_query):
+        # [신규] 첫 단어 추출 및 필수 포함 로직
+        first_word = search_query.strip().split()[0].lower() if search_query else ""
+        
         gift_keywords = ["상품권", "증정", "페이백", "포인트", "캐시백", "이벤트", "경품"]
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
         total_excludes = base_excludes + [x.strip() for x in user_excludes.split(',') if x.strip()]
@@ -57,6 +60,11 @@ class AdvancedSearchEngine:
         raw_results = []
         for item in items:
             title = item['title']
+            t_low = title.lower()
+            
+            # [핵심] 첫 단어가 제목에 없는 경우 필터링 (아이폰 검색 시 케이스 등 방지)
+            if first_word and first_word not in t_low: continue
+            
             if exclude_pattern.search(title): continue
             found = price_pattern.findall(title)
             if not found: continue
@@ -65,14 +73,14 @@ class AdvancedSearchEngine:
             if found[0][1] == '만': num *= 10000
             if num < 5000: continue 
 
-            # 상품권 필터링 유지
+            # 상품권 필터링
             if any(k in title for k in gift_keywords) and num < 100000: continue
 
             raw_results.append({"price": num, "title": title})
 
         if not raw_results: return {}
 
-        # IQR 이상치 제거 로직 유지
+        # IQR 이상치 제거
         prices = [x['price'] for x in raw_results]
         q1, q3 = np.percentile(prices, [25, 75])
         iqr = q3 - q1
@@ -110,7 +118,7 @@ class AdvancedSearchEngine:
 # 2. UI 메인 로직
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v5.8", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v5.9", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -134,7 +142,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v5.8</div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v5.9</div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.get('s_name', ""))
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.get('s_price', ""))
@@ -146,7 +154,7 @@ def main():
             if in_name:
                 with st.spinner('최저가 추정중...'):
                     raw = AdvancedSearchEngine.search_all(in_name)
-                    res = AdvancedSearchEngine.categorize_deals(raw, in_exclude)
+                    res = AdvancedSearchEngine.categorize_deals(raw, in_exclude, in_name)
                     s_type, s_msg = AdvancedSearchEngine.summarize_sentiment(raw)
                     data = {"name": in_name, "user_price": in_price, "results": res, "s_type": s_type, "s_msg": s_msg, "time": datetime.now().strftime('%H:%M')}
                     st.session_state.current_data = data
@@ -160,14 +168,13 @@ def main():
     if st.session_state.current_data:
         d = st.session_state.current_data
         
-        # 가이드 박스 로직 유지
         if not d['results']:
             st.markdown(f'''
             <div class="guide-box">
                 ⚠️ <b>시세 정보 추출 실패</b><br>
-                입력하신 "{d['name']}"에 대한 명확한 가격 정보가 없습니다.<br>
-                - <b>모델명</b>을 구체적으로 입력해보세요 (예: 갤럭시워치6 44mm)<br>
-                - <b>나의 확인가</b>를 입력하면 판독이 정밀해집니다.
+                입력하신 "{d['name']}"의 핵심 단어가 포함된 명확한 가격 정보가 없습니다.<br>
+                - <b>모델명</b>을 더 정확하게 입력해보세요.<br>
+                - 첫 단어가 제목에 꼭 포함되어야 검색 결과로 인정됩니다.
             </div>
             ''', unsafe_allow_html=True)
         else:
@@ -192,8 +199,8 @@ def main():
         eq = urllib.parse.quote(d['name'])
         cl1, cl2 = st.columns(2)
         cl1.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={eq}&category=1" class="link-btn" target="_blank">뽐뿌 바로가기</a>', unsafe_allow_html=True)
-        # 클리앙 사용기 고정 링크 (404 방지 적용)
-        cl2.markdown(f'<a href="https://www.clien.net/service/search?q={eq}&boardName=all_use&sort=recency" class="link-btn" target="_blank">클리앙 사용기</a>', unsafe_allow_html=True)
+        # 클리앙 사용기 게시판 고정 링크 (Deep Link)
+        cl2.markdown(f'<a href="https://www.clien.net/service/board/all_use?sk=title&sv={eq}" class="link-btn" target="_blank">클리앙 사용기</a>', unsafe_allow_html=True)
 
     if st.session_state.history:
         st.write("---")
@@ -203,6 +210,6 @@ def main():
                 st.session_state.current_data = h
                 st.rerun()
 
-    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v5.8 - Clien Target Fixed (all_use)</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v5.9 - Strict Search & Clien Board Fixed</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
