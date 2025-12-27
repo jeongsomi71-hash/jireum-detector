@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. CORE ENGINE (고정된 핵심 로직)
+# 1. CORE ENGINE (기능 유지)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -36,11 +36,9 @@ class AdvancedSearchEngine:
     def categorize_deals(items, user_excludes, search_query):
         raw_first_word = search_query.strip().split()[0] if search_query else ""
         clean_first_word = re.sub(r'[^a-zA-Z0-9가-힣]', '', raw_first_word).lower()
-        
         gift_keywords = ["상품권", "증정", "페이백", "포인트", "캐시백", "이벤트", "경품"]
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
         total_excludes = base_excludes + [x.strip() for x in user_excludes.split(',') if x.strip()]
-        
         exclude_pattern = re.compile('|'.join(map(re.escape, total_excludes)))
         price_pattern = re.compile(r'([0-9,]{1,10})\s?(원|만)')
         
@@ -50,10 +48,8 @@ class AdvancedSearchEngine:
             clean_title = re.sub(r'[^a-zA-Z0-9가-힣]', '', title).lower()
             if clean_first_word and clean_first_word not in clean_title: continue
             if exclude_pattern.search(title): continue
-            
             found = price_pattern.findall(title)
             if not found: continue
-            
             num = int(found[0][0].replace(',', ''))
             if found[0][1] == '만': num *= 10000
             if num < 5000: continue 
@@ -78,51 +74,52 @@ class AdvancedSearchEngine:
             categorized[spec].append(item)
         return categorized
 
-    @staticmethod
-    def summarize_sentiment(items):
-        if not items: return None, "데이터 부족"
-        txt = " ".join([i['title'] for i in items])
-        p = sum(1 for k in ["역대급", "최저가", "좋네요", "가성비", "지름"] if k in txt)
-        n = sum(1 for k in ["품절", "종료", "비싸", "아쉽", "비추"] if k in txt)
-        if p > n: return "pos", "🔥 구매 적기: 실사용자 여론이 매우 긍정적입니다."
-        if n > p: return "neg", "🧊 관망 추천: 최근 부정적인 의견이나 종료된 딜이 많습니다."
-        return "neu", "💬 평이함: 시세가 안정적이며 특이사항이 없습니다."
-
 # ==========================================
-# 2. TRENDY UI COMPONENTS
+# 2. UI DESIGN (입력창 시인성 강화)
 # ==========================================
 def apply_premium_style():
     st.set_page_config(page_title="지름신 판독기 PRO", layout="centered")
     st.markdown("""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Spoqa+Han+Sans+Neo:wght@100;400;700&display=swap');
-        * { font-family: 'Spoqa Han Sans Neo', sans-serif; }
-        [data-testid="stAppViewContainer"] { background: linear-gradient(180deg, #0f1115 0%, #000000 100%); }
+        [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
         
-        /* Header Area */
-        .main-header { padding: 2rem 0; text-align: center; }
-        .main-title { font-size: 2.2rem; font-weight: 800; background: linear-gradient(90deg, #00FF88, #60efff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem; }
-        .sub-title { color: #888; font-size: 0.9rem; letter-spacing: 2px; }
+        /* 1. 레이블 (흰색 고정) */
+        label p { color: #FFFFFF !important; font-weight: 800 !important; font-size: 1.1rem !important; margin-bottom: 5px; }
+        
+        /* 2. 입력창 (흰색 배경 + 검정 글자) */
+        .stTextInput input {
+            background-color: #FFFFFF !important;
+            color: #000000 !important; /* 입력 후 글자색: 검정 */
+            border: 2px solid #DDDDDD !important;
+            border-radius: 10px !important;
+            height: 3rem !important;
+            font-size: 1.1rem !important;
+            font-weight: 600 !important;
+        }
+        
+        /* 3. 입력 전 가이드 텍스트 (Placeholder) 색상 */
+        .stTextInput input::placeholder {
+            color: #666666 !important; /* 가이드 글자색: 진한 회색 */
+            opacity: 1;
+        }
 
-        /* Card System */
-        .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; margin-bottom: 15px; }
-        .price-tag { color: #00FF88; font-size: 1.8rem; font-weight: 700; }
-        .product-name { color: #fff; font-size: 1rem; line-height: 1.5; font-weight: 400; margin-bottom: 8px; }
-        
-        /* Buttons */
-        .stButton>button { border-radius: 12px; height: 3.5rem; font-weight: 700; transition: all 0.2s; border: none; }
-        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background: linear-gradient(90deg, #00FF88, #00BD65) !important; color: #000 !important; }
-        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0, 255, 136, 0.3); }
-        div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }
-        
-        /* Indicators */
-        .sentiment-badge { padding: 8px 16px; border-radius: 50px; font-weight: 700; font-size: 0.85rem; display: inline-block; margin-bottom: 1rem; }
-        .pos-badge { background: rgba(0, 255, 136, 0.1); color: #00FF88; border: 1px solid #00FF88; }
-        .neg-badge { background: rgba(255, 75, 75, 0.1); color: #FF4B4B; border: 1px solid #FF4B4B; }
-        .neu-badge { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid #fff; }
-        
-        /* Input Styling */
-        .stTextInput>div>div>input { background-color: rgba(255,255,255,0.05) !important; border-color: rgba(255,255,255,0.1) !important; color: white !important; border-radius: 10px !important; }
+        /* 4. 입력창 포커스 시 테두리 */
+        .stTextInput input:focus {
+            border-color: #00FF88 !important;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.2) !important;
+        }
+
+        /* 헤더/기타 스타일 */
+        .main-title { font-size: 2.2rem; font-weight: 900; color: #00FF88 !important; text-align: center; margin-bottom: 5px; }
+        .sub-title { color: #CCCCCC !important; text-align: center; font-size: 0.85rem; margin-bottom: 30px; }
+
+        .stButton>button { width: 100%; border-radius: 10px; height: 3.5rem; font-weight: 800; font-size: 1.1rem; }
+        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; border: none !important; }
+        div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background-color: transparent !important; color: #FF4B4B !important; border: 2px solid #FF4B4B !important; }
+
+        .result-card { background-color: #111111; border: 2px solid #00FF88; border-radius: 12px; padding: 20px; margin-bottom: 15px; }
+        .price-text { color: #00FF88 !important; font-size: 2rem; font-weight: 900; float: right; }
+        .title-text { color: #FFFFFF !important; font-size: 1.1rem; display: block; margin-bottom: 10px; line-height: 1.4; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -133,29 +130,29 @@ def main():
     if 'current_data' not in st.session_state: st.session_state.current_data = None
     if 'reset_key' not in st.session_state: st.session_state.reset_key = 0
 
-    # Header Section
-    st.markdown('<div class="main-header"><div class="main-title">지름신 판독기 PRO</div><div class="sub-title">SMART SHOPPING AI ADVISOR v7.0</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚖️ 지름신 판독기 PRO</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">v7.2 VISIBILITY REFINED</div>', unsafe_allow_html=True)
 
-    # Input Section
-    with st.container():
-        rk = st.session_state.reset_key
-        in_name = st.text_input("🎯 검색 모델명", key=f"n_{rk}", placeholder="예: 아이폰 15 프로")
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            in_price = st.text_input("💵 나의 확인가", key=f"p_{rk}", placeholder="숫자만 입력")
-        with col_p2:
-            in_exclude = st.text_input("🚫 제외 단어", value="직구, 해외, 렌탈, 당근, 중고", key=f"e_{rk}")
+    # 입력 영역
+    rk = st.session_state.reset_key
+    in_name = st.text_input("📦 검색 모델명", key=f"n_{rk}", placeholder="제품명을 입력하세요")
+    
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        in_price = st.text_input("💰 나의 확인가", key=f"p_{rk}", placeholder="가격을 입력하세요")
+    with col_p2:
+        in_exclude = st.text_input("🚫 제외 단어", value="직구, 해외, 렌탈, 당근, 중고", key=f"e_{rk}")
 
-    st.write("") # 스페이서
+    st.write("") 
     c1, c2 = st.columns([3, 1])
     with c1:
         if st.button("🔍 판독 시작"):
             if in_name:
-                with st.spinner('데이터 분석 중...'):
+                with st.spinner('데이터 추출 중...'):
+                    # 뽐뿌 검색 로직 호출
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_exclude, in_name)
-                    s_type, s_msg = AdvancedSearchEngine.summarize_sentiment(raw)
-                    data = {"name": in_name, "user_price": in_price, "results": res, "s_type": s_type, "s_msg": s_msg, "time": datetime.now().strftime('%H:%M')}
+                    data = {"name": in_name, "user_price": in_price, "results": res, "time": datetime.now().strftime('%H:%M')}
                     st.session_state.current_data = data
                     if data not in st.session_state.history: st.session_state.history.insert(0, data)
                     st.rerun()
@@ -165,44 +162,29 @@ def main():
             st.session_state.current_data = None
             st.rerun()
 
-    # Result Section
+    # 결과 표시
     if st.session_state.current_data:
         d = st.session_state.current_data
-        st.markdown("---")
+        st.markdown("<hr style='border:1px solid #333'>", unsafe_allow_html=True)
         
         if not d['results']:
-            # 쉼표 제거 로직 포함
             clean_term = re.sub(r'[^a-zA-Z0-9가-힣]$', '', d['name'].split()[0])
-            st.error(f'⚠️ 핵심 키워드 "{clean_term}" 에 대한 유효한 시세 정보가 없습니다.')
+            st.error(f'"{clean_term}" 검색 결과가 없습니다. 핵심 단어만 입력해 보세요.')
         else:
-            # Sentiment Badge
-            badge_class = f"{d['s_type']}-badge"
-            st.markdown(f'<div class="sentiment-badge {badge_class}">{d["s_msg"]}</div>', unsafe_allow_html=True)
-
             for opt, items in sorted(d['results'].items(), reverse=True):
                 best = sorted(items, key=lambda x: x['price'])[0]
                 st.markdown(f'''
-                    <div class="glass-card">
-                        <div class="product-name">[{opt}] {best['title']}</div>
-                        <div class="price-tag">{best['price']:,}원</div>
+                    <div class="result-card">
+                        <span class="price-text">{best['price']:,}원</span>
+                        <span class="title-text">[{opt}] {best['title']}</span>
+                        <div style="clear:both;"></div>
                     </div>
                 ''', unsafe_allow_html=True)
-                
-                if d['user_price'].isdigit():
-                    diff = int(d['user_price']) - best['price']
-                    if diff <= 0: st.success("✅ 현재 확인하신 가격이 핫딜보다 저렴하거나 비슷합니다! 지르세요.")
-                    else: st.warning(f"❌ 핫딜 대비 {diff:,}원 비쌉니다. 조금 더 기다려보세요.")
 
-        # Action Link
+        # 뽐뿌 링크
         q_enc = urllib.parse.quote(d['name'])
-        st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={q_enc}&category=1" target="_blank" style="text-decoration:none;"><div style="background:rgba(255,255,255,0.05); color:#00FF88; padding:15px; border-radius:12px; text-align:center; font-weight:700; border:1px solid rgba(0,255,136,0.3);">🔗 뽐뿌 검색 결과 전체 보기</div></a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={q_enc}&category=1" target="_blank" style="text-decoration:none;"><div style="background-color:#1A1A1A; color:#00FF88; padding:15px; border-radius:10px; text-align:center; font-weight:700; border:1px solid #333;">🔗 뽐뿌 전체 결과 보기</div></a>', unsafe_allow_html=True)
 
-    # History Footer
-    if st.session_state.history:
-        with st.expander("📜 최근 판독 이력 보기"):
-            for h in st.session_state.history[:5]:
-                st.text(f"[{h['time']}] {h['name']}")
-
-    st.markdown('<div style="text-align:center; color:#444; font-size:0.75rem; margin-top:50px;">PREMIUM ANALYTICS ENGINE v7.0</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; color:#555; font-size:0.75rem; margin-top:50px;">v7.2 | BLACK & WHITE CONTRAST</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
