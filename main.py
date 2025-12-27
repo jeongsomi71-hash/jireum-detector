@@ -1,5 +1,5 @@
-
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -7,8 +7,32 @@ import urllib.parse
 from datetime import datetime
 import numpy as np
 
+# [해결책 1] 페이지 설정을 코드 최상단에 배치하여 최우선 순위 확보
+st.set_page_config(page_title="지름 판독기", page_icon="⚖️", layout="centered")
+
+# [해결책 2] PWA 아이콘 및 앱명 강제 주입 스크립트 (브라우저 캐시 무시용)
+components.html(
+    """
+    <script>
+    var link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+    link.type = 'image/png';
+    link.rel = 'shortcut icon';
+    link.href = 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png';
+    document.getElementsByTagName('head')[0].appendChild(link);
+
+    var appleLink = document.createElement('link');
+    appleLink.rel = 'apple-touch-icon';
+    appleLink.href = 'https://cdn-icons-png.flaticon.com/512/2933/2933116.png';
+    document.getElementsByTagName('head')[0].appendChild(appleLink);
+
+    document.title = "지름 판독기";
+    </script>
+    """,
+    height=0,
+)
+
 # ==========================================
-# 1. CORE ENGINE (뽐뿌게시판 category=8 정밀 고정)
+# 1. CORE ENGINE (뽐뿌게시판 category=8 절대 경로)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -18,8 +42,8 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # category=8 (뽐뿌게시판) 파라미터 우선순위 고정
-        url = f"https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&category=8&keyword={encoded_query}"
+        # category=8(뽐뿌게시판) 파라미터를 가장 앞에 배치하여 필터 강제
+        url = f"https://m.ppomppu.co.kr/new/search_result.php?category=8&search_type=sub_memo&keyword={encoded_query}"
         all_data = []
         try:
             res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
@@ -87,12 +111,9 @@ class AdvancedSearchEngine:
         return "neu", "⚖️ 적정 시세 범위 내에 있습니다.", "💬 전반적으로 평이하며 실사용 만족도는 무난한 수준입니다."
 
 # ==========================================
-# 2. UI/UX (v8.2 원복 및 PWA 아이콘 수정)
+# 2. UI/UX (v8.2 원복)
 # ==========================================
 def apply_style():
-    # 브라우저 아이콘 및 타이틀 고정
-    st.set_page_config(page_title="지름 판독기", page_icon="⚖️", layout="centered")
-    
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -100,24 +121,19 @@ def apply_style():
         .main-header { padding: 1.5rem 0 1rem 0; text-align: center; }
         .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; display: inline-block; }
         .version-badge { color: #555; font-size: 0.75rem; font-weight: 800; margin-left: 8px; vertical-align: middle; border: 1px solid #333; padding: 2px 6px; border-radius: 4px; }
-        .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #CCCCCC !important; border-radius: 8px; height: 2.8rem; }
+        .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; border-radius: 8px; height: 2.8rem; }
         .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }
         div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; }
         div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }
         .section-card { background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }
         .section-label { color: #888; font-size: 0.8rem; font-weight: 800; margin-bottom: 8px; display: block; border-left: 3px solid #00FF88; padding-left: 8px; }
         .content-text { color: #FFFFFF !important; font-size: 1.05rem; font-weight: 600; }
-        .price-item { margin-bottom: 12px; border-bottom: 1px solid #222; padding-bottom: 10px; padding-left: 5px; }
+        .price-item { margin-bottom: 12px; border-bottom: 1px solid #222; padding-bottom: 10px; }
         .price-tag { color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }
-        .item-title { color: #CCCCCC !important; font-size: 0.9rem; line-height: 1.4; display: block; }
+        .item-title { color: #CCCCCC !important; font-size: 0.9rem; line-height: 1.4; }
         .footer-link { background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }
-        .version-tag-footer { text-align: center; color: #333; font-size: 0.65rem; margin-top: 30px; letter-spacing: 1px; }
+        .version-tag-footer { text-align: center; color: #333; font-size: 0.65rem; margin-top: 30px; }
         </style>
-        
-        <meta name="apple-mobile-web-app-title" content="지름 판독기">
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
-        <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
     """, unsafe_allow_html=True)
 
 def main():
@@ -129,8 +145,7 @@ def main():
     if 'input_val_price' not in st.session_state: st.session_state.input_val_price = ""
     if 'input_val_exclude' not in st.session_state: st.session_state.input_val_exclude = "직구, 해외, 렌탈, 당근, 중고"
 
-    # 타이틀 및 버전 (상단 유지)
-    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div><span class="version-badge">v8.2.7</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div><span class="version-badge">v8.2.8</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 검색 모델명", value=st.session_state.input_val_name)
     c_p1, c_p2 = st.columns(2)
@@ -139,7 +154,6 @@ def main():
 
     col1, col2 = st.columns([3, 1])
     with col1:
-        # 문구 v8.2 버전으로 원복
         if st.button("🔍 판독 엔진 가동"):
             if in_name:
                 with st.spinner('데이터 분석 중...'):
@@ -165,7 +179,7 @@ def main():
         d = st.session_state.current_data
         st.write("---")
         if not d['results']:
-            st.error("뽐뿌게시판에서 분석 가능한 유효 데이터가 부족합니다.")
+            st.error("뽐뿌게시판(category=8) 검색 결과가 부족합니다.")
         else:
             final_msg = d['s_msg']
             if d['user_price'].isdigit():
@@ -181,17 +195,11 @@ def main():
             
             for spec, items in sorted(d['results'].items(), reverse=True):
                 best = sorted(items, key=lambda x: x['price'])[0]
-                st.markdown(f'''
-                    <div class="price-item">
-                        <span class="price-tag">{best['price']:,}원</span>
-                        <span class="item-title"><b>[{spec}]</b> {best['title']}</span>
-                        <div style="clear:both;"></div>
-                    </div>
-                ''', unsafe_allow_html=True)
+                st.markdown(f'<div class="price-item"><span class="price-tag">{best["price"]:,}원</span><span class="item-title"><b>[{spec}]</b> {best["title"]}</span><div style="clear:both;"></div></div>', unsafe_allow_html=True)
 
         q_url = urllib.parse.quote(d['name'])
-        # [뽐뿌게시판 정밀 링크] category=8 및 search_type 고정 적용
-        st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&category=8&keyword={q_url}" target="_blank" class="footer-link">🔗 뽐뿌게시판 원문 결과 확인</a>', unsafe_allow_html=True)
+        # [뽐뿌게시판 고정 필터 적용 링크]
+        st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?category=8&search_type=sub_memo&keyword={q_url}" target="_blank" class="footer-link">🔗 뽐뿌게시판 원문 결과 확인</a>', unsafe_allow_html=True)
 
     if st.session_state.history:
         st.write("---")
@@ -204,6 +212,6 @@ def main():
                 st.session_state.current_data = h
                 st.rerun()
 
-    st.markdown('<div class="version-tag-footer">⚖️ 지름 판독기 PRO v8.2.7</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-tag-footer">⚖️ 지름 판독기 PRO v8.2.8</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
