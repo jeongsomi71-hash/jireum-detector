@@ -85,23 +85,16 @@ class AdvancedSearchEngine:
         return "neu", "⚖️ 적정 시세 범위 내에 있습니다.", "💬 전반적으로 평이하며 실사용 만족도는 무난한 수준입니다."
 
 # ==========================================
-# 2. UI/UX (아이콘 및 타이틀 반영)
+# 2. UI/UX (스타일 및 레이아웃 설정)
 # ==========================================
 def apply_style():
-    # 브라우저 탭 아이콘 및 타이틀 설정
     st.set_page_config(page_title="지름 판독기", page_icon="⚖️", layout="centered")
-    
     st.markdown("""
-        <head>
-            <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
-            <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
-        </head>
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
         label p { color: #FFFFFF !important; font-weight: 500 !important; font-size: 0.95rem !important; }
-        .main-header { padding: 1rem 0; text-align: center; }
+        .main-header { padding: 1.5rem 0 0.5rem 0; text-align: center; }
         .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; }
-        .version-tag { color: #555; font-size: 0.7rem; font-weight: bold; }
         .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #CCCCCC !important; border-radius: 8px; height: 2.8rem; }
         .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }
         div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; }
@@ -116,7 +109,11 @@ def apply_style():
         .item-title { color: #CCCCCC !important; font-size: 0.9rem; line-height: 1.4; display: block; }
         
         .footer-link { background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }
+        .version-tag-footer { text-align: center; color: #444; font-size: 0.7rem; margin-top: 30px; font-weight: bold; }
         </style>
+        
+        <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
+        <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
     """, unsafe_allow_html=True)
 
 def main():
@@ -128,7 +125,8 @@ def main():
     if 'input_val_price' not in st.session_state: st.session_state.input_val_price = ""
     if 'input_val_exclude' not in st.session_state: st.session_state.input_val_exclude = "직구, 해외, 렌탈, 당근, 중고"
 
-    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기 PRO</div><div class="version-tag">v8.2 - APP ICON APPLIED</div></div>', unsafe_allow_html=True)
+    # 상단 타이틀 (버전 정보 제거)
+    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 검색 모델명", value=st.session_state.input_val_name)
     c_p1, c_p2 = st.columns(2)
@@ -175,6 +173,7 @@ def main():
 
             st.markdown(f'<div class="section-card"><span class="section-label">판단결과</span><div class="content-text">{final_msg}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="section-card"><span class="section-label">만족도 후기 요약</span><div class="content-text">{d["s_review"]}</div></div>', unsafe_allow_html=True)
+            
             for spec, items in sorted(d['results'].items(), reverse=True):
                 best = sorted(items, key=lambda x: x['price'])[0]
                 st.markdown(f'''
@@ -188,6 +187,7 @@ def main():
         q_url = urllib.parse.quote(d['name'])
         st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={q_url}&category=1" target="_blank" class="footer-link">🔗 뽐뿌 원문 결과 확인</a>', unsafe_allow_html=True)
 
+    # 이력 및 버전명 하단 배치
     if st.session_state.history:
         st.write("---")
         st.subheader("📜 최근 판독 이력")
@@ -198,5 +198,8 @@ def main():
                 st.session_state.input_val_exclude = h['exclude']
                 st.session_state.current_data = h
                 st.rerun()
+
+    # 화면 최하단 버전 표시
+    st.markdown('<div class="version-tag-footer">v8.2.2 - Final Stable</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
