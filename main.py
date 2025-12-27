@@ -76,7 +76,7 @@ class AdvancedSearchEngine:
 
     @staticmethod
     def summarize_sentiment(items):
-        if not items: return None, "데이터 부족", "확인된 후기가 없습니다."
+        if not items: return "neu", "⚖️ 판단 보류", "확인된 후기가 없습니다."
         txt = " ".join([i['title'] for i in items])
         p = sum(1 for k in ["역대급", "최저가", "좋네요", "가성비", "지름", "추천", "만족"] if k in txt)
         n = sum(1 for k in ["품절", "종료", "비싸", "아쉽", "비추", "불만"] if k in txt)
@@ -88,10 +88,10 @@ class AdvancedSearchEngine:
         return "neu", "⚖️ 적정 시세 범위 내에 있습니다.", "💬 전반적으로 평이하며 실사용 만족도는 무난한 수준입니다."
 
 # ==========================================
-# 2. UI/UX (v7.8 텍스트 밸런스 조정)
+# 2. UI/UX (v7.9 레이아웃 정제)
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v7.8", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v7.9", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -102,7 +102,7 @@ def apply_style():
         .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; margin-bottom: 2px; }
         .version-tag { color: #555; font-size: 0.7rem; font-weight: bold; }
 
-        /* 입력창 가독성 (v7.2 스타일 유지) */
+        /* 입력창 */
         .stTextInput input {
             background-color: #FFFFFF !important;
             color: #000000 !important;
@@ -116,14 +116,14 @@ def apply_style():
         div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; border: none !important; }
         div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }
         
-        /* 섹션 카드 디자인 (통일) */
+        /* 섹션 카드 */
         .section-card { 
             background: #111111; border: 1px solid #333; 
             border-radius: 12px; padding: 18px; margin-bottom: 15px; 
         }
         .section-label { color: #888; font-size: 0.8rem; font-weight: 800; margin-bottom: 8px; display: block; border-left: 3px solid #00FF88; padding-left: 8px; }
         
-        /* 내용 텍스트 (흰색 유지, 제목보다 크지 않게) */
+        /* 내용 텍스트 */
         .content-text { color: #FFFFFF !important; font-size: 1.05rem; font-weight: 600; line-height: 1.5; }
         
         /* 시세 태그 */
@@ -142,7 +142,7 @@ def main():
     if 'rk' not in st.session_state: st.session_state.rk = 0 
     if 'input_q' not in st.session_state: st.session_state.input_q = ""
 
-    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름신 판독기 PRO</div><div class="version-tag">v7.8 - OPTIMIZED UX</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름신 판독기 PRO</div><div class="version-tag">v7.9 - FINAL POLISHED</div></div>', unsafe_allow_html=True)
 
     # 입력 섹션
     rk = st.session_state.rk
@@ -156,7 +156,7 @@ def main():
     with col1:
         if st.button("🔍 판독 엔진 가동"):
             if in_name:
-                with st.spinner('시세 및 여론 분석 중...'):
+                with st.spinner('데이터 분석 중...'):
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_exclude, in_name)
                     s_type, s_msg, s_review = AdvancedSearchEngine.summarize_sentiment(raw)
@@ -181,11 +181,27 @@ def main():
             clean_term = re.sub(r'[^a-zA-Z0-9가-힣]$', '', d['name'].split()[0])
             st.error(f"'{clean_term}'에 대한 유효한 데이터가 부족합니다.")
         else:
+            # 확실한 판단 결과 도출
+            final_msg = d['s_msg']
+            if d['user_price'].isdigit():
+                # 포착된 모든 시세 중 최저가 기준 비교
+                all_prices = [item['price'] for sublist in d['results'].values() for item in sublist]
+                best_market_price = min(all_prices)
+                user_p = int(d['user_price'])
+                diff = user_p - best_market_price
+                
+                if diff <= 0:
+                    final_msg = "🔥 역대급 가격입니다! 망설임 없이 지르세요."
+                elif diff < best_market_price * 0.05:
+                    final_msg = "✅ 최저가와 비슷합니다. 충분히 메리트 있는 가격입니다."
+                else:
+                    final_msg = f"❌ 관망 추천: 최저가보다 {diff:,}원 더 비쌉니다."
+
             # [판단결과] 카드
             st.markdown(f'''
                 <div class="section-card">
                     <span class="section-label">판단결과</span>
-                    <div class="content-text">{d['s_msg']}</div>
+                    <div class="content-text">{final_msg}</div>
                 </div>
             ''', unsafe_allow_html=True)
 
@@ -197,8 +213,8 @@ def main():
                 </div>
             ''', unsafe_allow_html=True)
             
-            # 실시간 시세 리스트
-            st.markdown('<div class="section-card"><span class="section-label">실시간 포착 시세</span>', unsafe_allow_html=True)
+            # 시세 리스트 (타이틀 제거 및 카드 형식 유지)
+            st.markdown('<div class="section-card">', unsafe_allow_html=True)
             for spec, items in sorted(d['results'].items(), reverse=True):
                 best = sorted(items, key=lambda x: x['price'])[0]
                 st.markdown(f'''
