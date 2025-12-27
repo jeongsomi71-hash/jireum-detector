@@ -6,11 +6,11 @@ import urllib.parse
 from datetime import datetime
 import numpy as np
 
-# [1] v8.2 표준 설정
+# [1] v8.2 순정 설정
 st.set_page_config(page_title="지름 판독기", page_icon="⚖️", layout="centered")
 
 # ==========================================
-# 2. CORE ENGINE (v8.2 무결성 복구)
+# 2. CORE ENGINE (v8.2 로직 100% 동일)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -20,7 +20,6 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # v8.2 표준 검색 URL
         url = f"https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={encoded_query}"
         all_data = []
         try:
@@ -37,7 +36,6 @@ class AdvancedSearchEngine:
 
     @staticmethod
     def categorize_deals(items, user_excludes, search_query):
-        # [v8.2] IQR 및 스펙 분류 엔진
         raw_first_word = search_query.strip().split()[0] if search_query else ""
         clean_first_word = re.sub(r'[^a-zA-Z0-9가-힣]', '', raw_first_word).lower()
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
@@ -78,7 +76,7 @@ class AdvancedSearchEngine:
         return categorized
 
 # ==========================================
-# 3. UI/UX (v8.2 디자인 원복)
+# 3. UI/UX (v8.2 순정 스타일 복구)
 # ==========================================
 def apply_style():
     st.markdown("""
@@ -88,13 +86,11 @@ def apply_style():
         .main-header { padding: 1.5rem 0; text-align: center; }
         .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; }
         .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; border-radius: 8px; }
-        .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }
-        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; }
-        div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }
+        .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; background-color: #00FF88 !important; color: #000 !important; }
         .section-card { background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }
         .price-tag { color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }
         .footer-link { background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }
-        .version-tag { text-align: center; color: #444; font-size: 0.7rem; margin-top: 40px; border-top: 1px solid #222; padding-top: 10px; }
+        .version-tag { text-align: center; color: #333; font-size: 0.7rem; margin-top: 50px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -103,30 +99,22 @@ def main():
     
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
-    if 'input_name' not in st.session_state: st.session_state.input_name = ""
-    if 'input_price' not in st.session_state: st.session_state.input_price = ""
 
     st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div></div>', unsafe_allow_html=True)
 
-    st.session_state.input_name = st.text_input("📦 검색 모델명", value=st.session_state.input_name)
-    st.session_state.input_price = st.text_input("💰 나의 가격 (숫자만)", value=st.session_state.input_price)
+    # v8.2 순정 입력창 배치
+    in_name = st.text_input("📦 검색 모델명")
+    in_price = st.text_input("💰 나의 가격 (숫자만)")
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.button("🔍 판독 엔진 가동"):
-            if st.session_state.input_name:
-                raw = AdvancedSearchEngine.search_all(st.session_state.input_name)
-                res = AdvancedSearchEngine.categorize_deals(raw, "직구, 해외", st.session_state.input_name)
-                data = {"name": st.session_state.input_name, "price": st.session_state.input_price, "results": res, "time": datetime.now().strftime('%H:%M')}
+    if st.button("🔍 판독 엔진 가동"):
+        if in_name:
+            with st.spinner('데이터 분석 중...'):
+                raw = AdvancedSearchEngine.search_all(in_name)
+                res = AdvancedSearchEngine.categorize_deals(raw, "직구, 해외", in_name)
+                data = {"name": in_name, "price": in_price, "results": res, "time": datetime.now().strftime('%H:%M:%S')}
                 st.session_state.current_data = data
                 st.session_state.history.insert(0, data)
                 st.rerun()
-    with col2:
-        if st.button("🔄 리셋"):
-            st.session_state.current_data = None
-            st.session_state.input_name = ""
-            st.session_state.input_price = ""
-            st.rerun()
 
     if st.session_state.current_data:
         d = st.session_state.current_data
@@ -137,18 +125,18 @@ def main():
                 st.markdown(f'<div class="section-card"><span class="price-tag">{best["price"]:,}원</span><b>[{spec}]</b><br>{best["title"]}</div>', unsafe_allow_html=True)
 
         q_url = urllib.parse.quote(d['name'])
+        # 뽐뿌게시판 링크 (v8.2 스타일)
         st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?category=8&search_type=sub_memo&keyword={q_url}" target="_blank" class="footer-link">🔗 뽐뿌게시판 실시간 결과 보기</a>', unsafe_allow_html=True)
 
     if st.session_state.history:
         st.write("---")
         st.subheader("📜 최근 판독 이력")
-        for h in st.session_state.history[:3]:
-            if st.button(f"[{h['time']}] {h['name']}", key=f"h_{h['time']}"):
+        # 에러 방지를 위한 고유 키 부여 (UX 미영향)
+        for idx, h in enumerate(st.session_state.history[:3]):
+            if st.button(f"[{h['time']}] {h['name']}", key=f"hist_{idx}_{h['time']}"):
                 st.session_state.current_data = h
-                st.session_state.input_name = h['name']
-                st.session_state.input_price = h['price']
                 st.rerun()
 
-    st.markdown('<div class="version-tag">⚖️ 지름 판독기 PRO v8.2.1</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-tag">⚖️ 지름 판독기 PRO v8.2.3</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
