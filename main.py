@@ -6,8 +6,7 @@ import urllib.parse
 from datetime import datetime
 import numpy as np
 
-
-# [1] v8.2 기반 순정 설정
+# [1] v8.2 순정 설정
 st.set_page_config(page_title="지름 판독기", page_icon="⚖️", layout="centered")
 
 # ==========================================
@@ -21,7 +20,6 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # 뽐뿌게시판 카테고리 고정(category=8)
         url = f"https://m.ppomppu.co.kr/new/search_result.php?category=8&search_type=sub_memo&keyword={encoded_query}"
         all_data = []
         try:
@@ -88,7 +86,7 @@ class AdvancedSearchEngine:
         return categorized
 
 # ==========================================
-# 3. UI/UX (v8.2 스타일 + 리셋 + 버전명)
+# 3. UI/UX (v8.2 순정 스타일 완벽 복구)
 # ==========================================
 def apply_style():
     st.markdown("""
@@ -97,12 +95,8 @@ def apply_style():
         label p { color: #FFFFFF !important; font-weight: 500 !important; }
         .main-header { padding: 1.5rem 0; text-align: center; }
         .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; }
-        .stTextInput input { border-radius: 8px; }
-        .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }
-        /* 판독 엔진 버튼 (초록) */
-        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; }
-        /* 리셋 버튼 (빨간 테두리) */
-        div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }
+        .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; border-radius: 8px; }
+        .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; background-color: #00FF88 !important; color: #000 !important; }
         .section-card { background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }
         .price-tag { color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }
         .footer-link { background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }
@@ -115,39 +109,30 @@ def main():
     
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
-    if 'input_name' not in st.session_state: st.session_state.input_name = ""
-    if 'input_price' not in st.session_state: st.session_state.input_price = ""
 
-    # [수정] 상단 제목 옆에 버전명 명시
-    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기 v8.2.5</div></div>', unsafe_allow_html=True)
+    # v8.2 순정 상단 타이틀
+    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기 v8.2.6</div></div>', unsafe_allow_html=True)
 
-    st.session_state.input_name = st.text_input("📦 검색 모델명", value=st.session_state.input_name)
-    st.session_state.input_price = st.text_input("💰 나의 가격 (숫자만)", value=st.session_state.input_price)
+    # v8.2 순정 입력창 배치
+    in_name = st.text_input("📦 검색 모델명")
+    in_price = st.text_input("💰 나의 가격 (숫자만)")
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.button("🔍 판독 엔진 가동"):
-            if st.session_state.input_name:
-                with st.spinner('데이터 분석 중...'):
-                    raw = AdvancedSearchEngine.search_all(st.session_state.input_name)
-                    res = AdvancedSearchEngine.categorize_deals(raw, "직구, 해외", st.session_state.input_name)
-                    s_type, s_msg, s_review = AdvancedSearchEngine.summarize_sentiment(raw)
-                    data = {"name": st.session_state.input_name, "price": st.session_state.input_price, "results": res, "s_msg": s_msg, "s_review": s_review, "time": datetime.now().strftime('%H:%M:%S')}
-                    st.session_state.current_data = data
-                    st.session_state.history.insert(0, data)
-                    st.rerun()
-    with col2:
-        # [수정] 리셋 기능 복구
-        if st.button("🔄 리셋"):
-            st.session_state.current_data = None
-            st.session_state.input_name = ""
-            st.session_state.input_price = ""
-            st.rerun()
+    if st.button("🔍 판독 엔진 가동"):
+        if in_name:
+            with st.spinner('데이터 분석 중...'):
+                raw = AdvancedSearchEngine.search_all(in_name)
+                res = AdvancedSearchEngine.categorize_deals(raw, "직구, 해외", in_name)
+                s_type, s_msg, s_review = AdvancedSearchEngine.summarize_sentiment(raw)
+                data = {"name": in_name, "price": in_price, "results": res, "s_msg": s_msg, "s_review": s_review, "time": datetime.now().strftime('%H:%M:%S')}
+                st.session_state.current_data = data
+                st.session_state.history.insert(0, data)
+                st.rerun()
 
     if st.session_state.current_data:
         d = st.session_state.current_data
         st.write("---")
         if d['results']:
+            # 시세 판단 로직
             final_msg = d['s_msg']
             if d['price'].isdigit():
                 all_prices = [item['price'] for sublist in d['results'].values() for item in sublist]
@@ -170,12 +155,10 @@ def main():
         st.write("---")
         st.subheader("📜 최근 판독 이력")
         for idx, h in enumerate(st.session_state.history[:3]):
-            if st.button(f"[{h['time']}] {h['name']}", key=f"hist_v825_{idx}_{h['time']}"):
+            if st.button(f"[{h['time']}] {h['name']}", key=f"hist_v826_{idx}_{h['time']}"):
                 st.session_state.current_data = h
-                st.session_state.input_name = h['name']
-                st.session_state.input_price = h['price']
                 st.rerun()
 
-    st.markdown('<div class="version-tag">⚖️ 지름 판독기 PRO v8.2.5</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-tag">⚖️ 지름 판독기 PRO v8.2.6</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
