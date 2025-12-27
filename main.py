@@ -85,31 +85,44 @@ class AdvancedSearchEngine:
         return "neu", "⚖️ 적정 시세 범위 내에 있습니다.", "💬 전반적으로 평이하며 실사용 만족도는 무난한 수준입니다."
 
 # ==========================================
-# 2. UI/UX (스타일 및 레이아웃 설정)
+# 2. UI/UX (상단 버전 복구 및 전체 유지)
 # ==========================================
 def apply_style():
+    # 브라우저 타이틀 및 아이콘
     st.set_page_config(page_title="지름 판독기", page_icon="⚖️", layout="centered")
+    
     st.markdown("""
         <style>
+        /* 기본 배경 및 폰트 설정 */
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
         label p { color: #FFFFFF !important; font-weight: 500 !important; font-size: 0.95rem !important; }
-        .main-header { padding: 1.5rem 0 0.5rem 0; text-align: center; }
-        .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; }
+        
+        /* 헤더 스타일 */
+        .main-header { padding: 1.5rem 0 1rem 0; text-align: center; position: relative; }
+        .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; display: inline-block; }
+        .version-badge { color: #555; font-size: 0.75rem; font-weight: 800; margin-left: 8px; vertical-align: middle; border: 1px solid #333; padding: 2px 6px; border-radius: 4px; }
+        
+        /* 입력창 스타일 */
         .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #CCCCCC !important; border-radius: 8px; height: 2.8rem; }
+        
+        /* 버튼 스타일 */
         .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }
         div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; }
         div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }
         
+        /* 결과 카드 및 리스트 스타일 */
         .section-card { background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }
         .section-label { color: #888; font-size: 0.8rem; font-weight: 800; margin-bottom: 8px; display: block; border-left: 3px solid #00FF88; padding-left: 8px; }
         .content-text { color: #FFFFFF !important; font-size: 1.05rem; font-weight: 600; }
         
+        /* 리스트 스타일 (박스 없음) */
         .price-item { margin-bottom: 12px; border-bottom: 1px solid #222; padding-bottom: 10px; padding-left: 5px; }
         .price-tag { color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }
         .item-title { color: #CCCCCC !important; font-size: 0.9rem; line-height: 1.4; display: block; }
         
+        /* 하단 링크 및 버전 */
         .footer-link { background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }
-        .version-tag-footer { text-align: center; color: #444; font-size: 0.7rem; margin-top: 30px; font-weight: bold; }
+        .version-tag-footer { text-align: center; color: #333; font-size: 0.65rem; margin-top: 30px; letter-spacing: 1px; }
         </style>
         
         <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2933/2933116.png">
@@ -125,8 +138,8 @@ def main():
     if 'input_val_price' not in st.session_state: st.session_state.input_val_price = ""
     if 'input_val_exclude' not in st.session_state: st.session_state.input_val_exclude = "직구, 해외, 렌탈, 당근, 중고"
 
-    # 상단 타이틀 (버전 정보 제거)
-    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div></div>', unsafe_allow_html=True)
+    # [상단 버전 복구] 메인 타이틀 옆에 v8.2.3 명시
+    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div><span class="version-badge">v8.2.3</span></div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 검색 모델명", value=st.session_state.input_val_name)
     c_p1, c_p2 = st.columns(2)
@@ -174,6 +187,7 @@ def main():
             st.markdown(f'<div class="section-card"><span class="section-label">판단결과</span><div class="content-text">{final_msg}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="section-card"><span class="section-label">만족도 후기 요약</span><div class="content-text">{d["s_review"]}</div></div>', unsafe_allow_html=True)
             
+            # 실시간 시세 (리스트 형태 - 박스 없음)
             for spec, items in sorted(d['results'].items(), reverse=True):
                 best = sorted(items, key=lambda x: x['price'])[0]
                 st.markdown(f'''
@@ -187,7 +201,6 @@ def main():
         q_url = urllib.parse.quote(d['name'])
         st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={q_url}&category=1" target="_blank" class="footer-link">🔗 뽐뿌 원문 결과 확인</a>', unsafe_allow_html=True)
 
-    # 이력 및 버전명 하단 배치
     if st.session_state.history:
         st.write("---")
         st.subheader("📜 최근 판독 이력")
@@ -199,7 +212,7 @@ def main():
                 st.session_state.current_data = h
                 st.rerun()
 
-    # 화면 최하단 버전 표시
-    st.markdown('<div class="version-tag-footer">v8.2.2 - Final Stable</div>', unsafe_allow_html=True)
+    # 하단 꼬리표 (보조 정보)
+    st.markdown('<div class="version-tag-footer">⚖️ 지름 판독기 PRO Engine v8.2.3</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
