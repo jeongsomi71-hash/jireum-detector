@@ -6,12 +6,12 @@ import urllib.parse
 from datetime import datetime
 import numpy as np
 
-# [1] 최상단 설정 - 아이콘 및 타이틀 (PWA 대응)
+# [1] 최상단 설정 - 아이콘 및 타이틀 (PWA 및 즐겨찾기 대응)
 ICON_URL = "https://cdn-icons-png.flaticon.com/512/2933/2933116.png"
 st.set_page_config(page_title="지름 판독기", page_icon=ICON_URL, layout="centered")
 
 # ==========================================
-# 2. CORE ENGINE (IQR, 스펙분류 로직 무결성 유지)
+# 2. CORE ENGINE (v8.2 무결성 완벽 복구)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -21,7 +21,7 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # 뽐뿌게시판(category=8) 절대 경로 고정
+        # 뽐뿌게시판(category=8) 경로 절대 고정
         url = f"https://m.ppomppu.co.kr/new/search_result.php?category=8&search_type=sub_memo&keyword={encoded_query}"
         all_data = []
         try:
@@ -39,6 +39,7 @@ class AdvancedSearchEngine:
 
     @staticmethod
     def categorize_deals(items, user_excludes, search_query):
+        # [v8.2 복구] 이상치 제거 및 스펙 분류 엔진
         raw_first_word = search_query.strip().split()[0] if search_query else ""
         clean_first_word = re.sub(r'[^a-zA-Z0-9가-힣]', '', raw_first_word).lower()
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
@@ -61,13 +62,13 @@ class AdvancedSearchEngine:
 
         if not raw_results: return {}
         
-        # [v8.2 복구] IQR 이상치 제거 엔진
+        # IQR 로직 복구
         prices = [x['price'] for x in raw_results]
         q1, q3 = np.percentile(prices, [25, 75])
         iqr = q3 - q1
         filtered_results = [x for x in raw_results if (q1 - 1.5*iqr) <= x['price'] <= (q3 + 1.5*iqr)]
 
-        # [v8.2 복구] 상세 스펙별 분류
+        # 스펙 분류 로직 복구
         categorized = {}
         for item in filtered_results:
             t_low = item['title'].lower()
@@ -102,13 +103,14 @@ def apply_style():
         .main-title {{ font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; }}
         .stTextInput input {{ background-color: #FFFFFF !important; color: #000000 !important; border-radius: 8px; }}
         .stButton>button {{ width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }}
-        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button {{ background-color: #00FF88 !important; color: #000 !important; }}
+        /* 첫 번째 버튼(판독)은 연두색, 두 번째 버튼(리셋)은 투명 테두리 */
+        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button {{ background-color: #00FF88 !important; color: #000 !important; border: none; }}
         div[data-testid="stColumn"]:nth-of-type(2) .stButton>button {{ background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }}
         .section-card {{ background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }}
         .price-item {{ margin-bottom: 12px; border-bottom: 1px solid #222; padding-bottom: 10px; }}
         .price-tag {{ color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }}
         .footer-link {{ background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }}
-        .version-tag-footer {{ text-align: center; color: #333; font-size: 0.65rem; margin-top: 30px; letter-spacing: 1px; }}
+        .version-tag-footer {{ text-align: center; color: #444; font-size: 0.7rem; margin-top: 40px; border-top: 1px solid #222; padding-top: 10px; }}
         </style>
         <head>
             <meta name="apple-mobile-web-app-title" content="지름 판독기">
@@ -126,7 +128,7 @@ def main():
 
     st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div></div>', unsafe_allow_html=True)
 
-    # 입력창
+    # 모델명 및 가격 입력창 (리셋 기능과 연동)
     st.session_state.input_name = st.text_input("📦 검색 모델명", value=st.session_state.input_name)
     st.session_state.input_price = st.text_input("💰 나의 가격 (숫자만)", value=st.session_state.input_price)
 
@@ -134,7 +136,7 @@ def main():
     with col1:
         if st.button("🔍 판독 엔진 가동"):
             if st.session_state.input_name:
-                with st.spinner('뽐뿌게시판 분석 중...'):
+                with st.spinner('데이터 분석 중...'):
                     raw = AdvancedSearchEngine.search_all(st.session_state.input_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, "직구, 해외", st.session_state.input_name)
                     s_type, s_msg, s_review = AdvancedSearchEngine.summarize_sentiment(raw)
@@ -143,7 +145,7 @@ def main():
                     st.session_state.history.insert(0, data)
                     st.rerun()
     with col2:
-        # [복구] 리셋 기능
+        # [복구] 리셋 버튼
         if st.button("🔄 리셋"):
             st.session_state.current_data = None
             st.session_state.input_name = ""
@@ -154,7 +156,7 @@ def main():
         d = st.session_state.current_data
         st.write("---")
         if not d['results']:
-            st.warning("뽐뿌게시판에서 데이터를 찾을 수 없습니다.")
+            st.error("뽐뿌게시판에서 유효한 데이터를 찾지 못했습니다.")
         else:
             final_msg = d['s_msg']
             if d['price'].isdigit():
@@ -172,21 +174,21 @@ def main():
                 st.markdown(f'<div class="price-item"><span class="price-tag">{best["price"]:,}원</span><b style="color:#00FF88;">[{spec}]</b> <span style="color:#CCC;">{best["title"]}</span></div>', unsafe_allow_html=True)
 
         q_url = urllib.parse.quote(d['name'])
-        # [해결] 뽐뿌게시판 category=8 고정 링크
+        # [해결] 뽐뿌게시판 카테고리 8 고정 링크
         fixed_link = f"https://m.ppomppu.co.kr/new/search_result.php?category=8&search_type=sub_memo&keyword={q_url}"
-        st.markdown(f'<a href="{fixed_link}" target="_blank" class="footer-link">🔗 뽐뿌게시판 실시간 결과 보기</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{fixed_link}" target="_blank" class="footer-link">🔗 뽐뿌게시판 실시간 원문 보기</a>', unsafe_allow_html=True)
 
     if st.session_state.history:
         st.write("---")
         st.subheader("📜 최근 판독 이력")
         for h in st.session_state.history[:3]:
-            if st.button(f"[{h['time']}] {h['name']}", key=f"h_{h['time']}"):
+            if st.button(f"[{h['time']}] {h['name']}", key=f"h_{h['time']}_{h['name']}"):
                 st.session_state.current_data = h
                 st.session_state.input_name = h['name']
                 st.session_state.input_price = h['price']
                 st.rerun()
 
     # [복구] 하단 버전명 표시
-    st.markdown('<div class="version-tag-footer">⚖️ 지름 판독기 PRO v8.3.4</div>', unsafe_allow_html=True)
+    st.markdown('<div class="version-tag-footer">⚖️ 지름 판독기 PRO v8.3.5</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
