@@ -41,7 +41,6 @@ class AdvancedSearchEngine:
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
         total_excludes = base_excludes + [x.strip() for x in user_excludes.split(',') if x.strip()]
         
-        # [수정완료] 괄호 누락 오류 수정
         exclude_pattern = re.compile('|'.join(map(re.escape, total_excludes)))
         price_pattern = re.compile(r'([0-9,]{1,10})\s?(원|만)')
         
@@ -97,18 +96,11 @@ class AdvancedSearchEngine:
         if n > p: return "neg", "🧊 **주의**: 최근 평이 좋지 않거나 종료된 딜일 수 있습니다."
         return "neu", "💬 **안정**: 현재 시세와 실사용 여론은 평이한 수준입니다."
 
-    @staticmethod
-    def get_recommendations(query):
-        # 단어 끝 부호 제거 로직 추가
-        words = query.strip().split()
-        first = re.sub(r'[^a-zA-Z0-9가-힣]$', '', words[0])
-        return [f"{first} 최저가", f"{first} 핫딜", f"{first} 가격"]
-
 # ==========================================
 # 2. UI 메인 로직
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v6.5", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v6.6", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -129,58 +121,55 @@ def apply_style():
 
 def main():
     apply_style()
-    # 상태 초기화
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
-    if 'input_val' not in st.session_state: st.session_state.input_val = ""
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v6.5</div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v6.6</div>', unsafe_allow_html=True)
 
-    # 텍스트 입력창 (session_state와 동기화)
-    in_name = st.text_input("📦 제품명 입력", value=st.session_state.input_val, key="main_input")
-    in_price = st.text_input("💰 나의 확인가 (숫자만)", key="price_input")
-    in_exclude = st.text_input("🚫 제외 단어", value="직구, 해외, 렌탈, 당근, 중고", key="exclude_input")
+    # 리셋 기능을 위한 폼(Form) 사용 - 입력창 강제 초기화의 가장 안정적인 방법
+    with st.form(key='search_form', clear_on_submit=False):
+        in_name = st.text_input("📦 제품명 입력", key="name_field")
+        in_price = st.text_input("💰 나의 확인가 (숫자만)", key="price_field")
+        in_exclude = st.text_input("🚫 제외 단어", value="직구, 해외, 렌탈, 당근, 중고", key="exclude_field")
+        
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            submit = st.form_submit_button("🔍 시세 판독 실행")
+        with c2:
+            reset = st.form_submit_button("🔄 리셋")
 
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        if st.button("🔍 시세 판독 실행"):
-            if in_name:
-                st.session_state.input_val = in_name
-                with st.spinner('최저가 추정중...'):
-                    raw = AdvancedSearchEngine.search_all(in_name)
-                    res = AdvancedSearchEngine.categorize_deals(raw, in_exclude, in_name)
-                    s_type, s_msg = AdvancedSearchEngine.summarize_sentiment(raw)
-                    data = {"name": in_name, "user_price": in_price, "results": res, "s_type": s_type, "s_msg": s_msg, "time": datetime.now().strftime('%H:%M')}
-                    st.session_state.current_data = data
-                    if data not in st.session_state.history: st.session_state.history.insert(0, data)
-                    st.rerun()
-    with c2:
-        if st.button("🔄 리셋"):
-            # 입력창 비우기 및 결과 초기화
-            st.session_state.input_val = ""
-            st.session_state.current_data = None
-            st.rerun()
+    if submit:
+        if in_name:
+            with st.spinner('최저가 추정중...'):
+                raw = AdvancedSearchEngine.search_all(in_name)
+                res = AdvancedSearchEngine.categorize_deals(raw, in_exclude, in_name)
+                s_type, s_msg = AdvancedSearchEngine.summarize_sentiment(raw)
+                data = {"name": in_name, "user_price": in_price, "results": res, "s_type": s_type, "s_msg": s_msg, "time": datetime.now().strftime('%H:%M')}
+                st.session_state.current_data = data
+                if data not in st.session_state.history: st.session_state.history.insert(0, data)
+                st.rerun()
+
+    if reset:
+        # 모든 세션 상태 초기화 및 페이지 새로고침
+        for key in ["name_field", "price_field", "exclude_field"]:
+            if key in st.session_state:
+                st.session_state[key] = ""
+        st.session_state.current_data = None
+        st.rerun()
 
     if st.session_state.current_data:
         d = st.session_state.current_data
         
         if not d['results']:
-            # 단어 끝 쉼표 제거 로직
+            # 검색어 끝 쉼표 제거 로직
             first_term = re.sub(r'[^a-zA-Z0-9가-힣]$', '', d['name'].split()[0])
             st.markdown(f'''
             <div class="guide-box">
                 ⚠️ <b>시세 정보 추출 실패</b><br>
-                입력하신 핵심 키워드 "{first_term}" 가 포함된 유효한 가격 정보가 없습니다<br><br>
-                💡 <b>추천 조합 (클릭 시 자동 입력):</b>
+                입력하신 핵심 키워드 "{first_term}" 가 포함된 유효한 가격 정보가 없습니다<br>
+                - 검색어를 더 단순하게 입력하거나 정확한 모델명을 입력해보세요
             </div>
             ''', unsafe_allow_html=True)
-            
-            recos = AdvancedSearchEngine.get_recommendations(d['name'])
-            r_cols = st.columns(len(recos))
-            for idx, r_text in enumerate(recos):
-                if r_cols[idx].button(r_text):
-                    st.session_state.input_val = r_text
-                    st.rerun()
         else:
             box_class = f"{d['s_type']}-box" if d['s_type'] else "neu-box"
             st.markdown(f'<div class="sentiment-highlight {box_class}">{d["s_msg"]}</div>', unsafe_allow_html=True)
@@ -208,10 +197,9 @@ def main():
         st.subheader("📜 최근 판독 이력")
         for idx, h in enumerate(st.session_state.history[:10]):
             if st.button(f"[{h['time']}] {h['name']}", key=f"hi_{idx}"):
-                st.session_state.input_val = h['name']
                 st.session_state.current_data = h
                 st.rerun()
 
-    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v6.5 - Bug Fix & Stability</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v6.6 - Reset Fix & Simple UI</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
