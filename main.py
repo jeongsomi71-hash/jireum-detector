@@ -80,54 +80,31 @@ class AdvancedSearchEngine:
         txt = " ".join([i['title'] for i in items])
         p = sum(1 for k in ["역대급", "최저가", "좋네요", "가성비", "지름", "추천", "만족"] if k in txt)
         n = sum(1 for k in ["품절", "종료", "비싸", "아쉽", "비추", "불만"] if k in txt)
-        
-        if p > n: 
-            return "pos", "✅ 현재 가격이 매우 훌륭합니다.", "💬 실사용자들의 만족도가 높고 구매 추천 의견이 지배적입니다."
-        if n > p: 
-            return "neg", "❌ 지금 구매하기엔 아쉬운 가격입니다.", "💬 품절이 잦거나 가격 대비 아쉽다는 의견이 보입니다."
+        if p > n: return "pos", "✅ 현재 가격이 매우 훌륭합니다.", "💬 실사용자들의 만족도가 높고 구매 추천 의견이 지배적입니다."
+        if n > p: return "neg", "❌ 지금 구매하기엔 아쉬운 가격입니다.", "💬 품절이 잦거나 가격 대비 아쉽다는 의견이 보입니다."
         return "neu", "⚖️ 적정 시세 범위 내에 있습니다.", "💬 전반적으로 평이하며 실사용 만족도는 무난한 수준입니다."
 
 # ==========================================
-# 2. UI/UX (v8.0 디자인 최적화)
+# 2. UI/UX (v8.1 레이아웃 정제)
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v8.0", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v8.1", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
         label p { color: #FFFFFF !important; font-weight: 500 !important; font-size: 0.95rem !important; }
-        
-        /* 헤더 */
         .main-header { padding: 1rem 0; text-align: center; }
         .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; margin-bottom: 2px; }
         .version-tag { color: #555; font-size: 0.7rem; font-weight: bold; }
-
-        /* 입력창 (흰 배경/검정 글자 - v7.2 스타일) */
-        .stTextInput input {
-            background-color: #FFFFFF !important;
-            color: #000000 !important;
-            border: 1px solid #CCCCCC !important;
-            border-radius: 8px !important;
-            height: 2.8rem !important;
-        }
-
-        /* 버튼 */
+        .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #CCCCCC !important; border-radius: 8px; height: 2.8rem; }
         .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }
-        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; border: none !important; }
+        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; }
         div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }
-        
-        /* 섹션 카드 */
-        .section-card { 
-            background: #111111; border: 1px solid #333; 
-            border-radius: 12px; padding: 18px; margin-bottom: 12px; 
-        }
+        .section-card { background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }
         .section-label { color: #888; font-size: 0.8rem; font-weight: 800; margin-bottom: 8px; display: block; border-left: 3px solid #00FF88; padding-left: 8px; }
-        .content-text { color: #FFFFFF !important; font-size: 1.05rem; font-weight: 600; line-height: 1.5; }
-        
-        /* 시세 태그 */
+        .content-text { color: #FFFFFF !important; font-size: 1.05rem; font-weight: 600; }
         .price-tag { color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }
         .item-title { color: #CCCCCC !important; font-size: 0.9rem; line-height: 1.4; display: block; }
-        
         .footer-link { background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 10px; }
         </style>
     """, unsafe_allow_html=True)
@@ -135,31 +112,32 @@ def apply_style():
 def main():
     apply_style()
     
-    # 세션 상태 초기화
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
-    if 'rk' not in st.session_state: st.session_state.rk = 0 
     
-    # 입력값 복원용 상태 관리
-    if 'q_name' not in st.session_state: st.session_state.q_name = ""
-    if 'q_price' not in st.session_state: st.session_state.q_price = ""
-    if 'q_exclude' not in st.session_state: st.session_state.q_exclude = "직구, 해외, 렌탈, 당근, 중고"
+    # [핵심] 입력창 값 유지를 위한 전용 세션 키
+    if 'input_val_name' not in st.session_state: st.session_state.input_val_name = ""
+    if 'input_val_price' not in st.session_state: st.session_state.input_val_price = ""
+    if 'input_val_exclude' not in st.session_state: st.session_state.input_val_exclude = "직구, 해외, 렌탈, 당근, 중고"
 
-    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름신 판독기 PRO</div><div class="version-tag">v8.0 - FULL RESTORE EDITION</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름신 판독기 PRO</div><div class="version-tag">v8.1 - STABLE RESTORE</div></div>', unsafe_allow_html=True)
 
-    # 입력 섹션 (rk를 활용한 리셋 및 value를 활용한 복원)
-    rk = st.session_state.rk
-    in_name = st.text_input("📦 검색 모델명", key=f"n_{rk}", value=st.session_state.q_name)
-    
+    # 입력 섹션 (고정 키를 사용하고 세션 상태와 연결)
+    in_name = st.text_input("📦 검색 모델명", value=st.session_state.input_val_name)
     c_p1, c_p2 = st.columns(2)
-    with c_p1: in_price = st.text_input("💰 나의 가격 (숫자)", key=f"p_{rk}", value=st.session_state.q_price)
-    with c_p2: in_exclude = st.text_input("🚫 제외 단어", key=f"e_{rk}", value=st.session_state.q_exclude)
+    with c_p1: in_price = st.text_input("💰 나의 가격 (숫자)", value=st.session_state.input_val_price)
+    with c_p2: in_exclude = st.text_input("🚫 제외 단어", value=st.session_state.input_val_exclude)
 
     col1, col2 = st.columns([3, 1])
     with col1:
         if st.button("🔍 판독 엔진 가동"):
             if in_name:
-                with st.spinner('실시간 데이터 분석 중...'):
+                with st.spinner('데이터 분석 중...'):
+                    # 현재 입력값 세션에 저장
+                    st.session_state.input_val_name = in_name
+                    st.session_state.input_val_price = in_price
+                    st.session_state.input_val_exclude = in_exclude
+                    
                     raw = AdvancedSearchEngine.search_all(in_name)
                     res = AdvancedSearchEngine.categorize_deals(raw, in_exclude, in_name)
                     s_type, s_msg, s_review = AdvancedSearchEngine.summarize_sentiment(raw)
@@ -169,20 +147,14 @@ def main():
                         "time": datetime.now().strftime('%H:%M')
                     }
                     st.session_state.current_data = data
-                    # 입력값 세션 저장 (복원용)
-                    st.session_state.q_name = in_name
-                    st.session_state.q_price = in_price
-                    st.session_state.q_exclude = in_exclude
-                    
                     if data not in st.session_state.history: st.session_state.history.insert(0, data)
                     st.rerun()
     with col2:
         if st.button("🔄 리셋"):
-            st.session_state.rk += 1
             st.session_state.current_data = None
-            st.session_state.q_name = ""
-            st.session_state.q_price = ""
-            st.session_state.q_exclude = "직구, 해외, 렌탈, 당근, 중고"
+            st.session_state.input_val_name = ""
+            st.session_state.input_val_price = ""
+            st.session_state.input_val_exclude = "직구, 해외, 렌탈, 당근, 중고"
             st.rerun()
 
     # 결과 분석 섹션
@@ -191,31 +163,22 @@ def main():
         st.write("---")
         
         if not d['results']:
-            clean_term = re.sub(r'[^a-zA-Z0-9가-힣]$', '', d['name'].split()[0])
-            st.error(f"'{clean_term}'에 대한 유효한 데이터가 부족합니다.")
+            st.error("분석 가능한 유효 데이터가 부족합니다.")
         else:
-            # 1. 가격 차이에 따른 확실한 판단 결과 도출
+            # 1. 강력한 판단 로직
             final_msg = d['s_msg']
             if d['user_price'].isdigit():
-                all_prices = [item['price'] for sublist in d['results'].values() for item in sublist]
-                best_market_price = min(all_prices)
-                user_p = int(d['user_price'])
-                diff = user_p - best_market_price
-                
-                if diff <= 0:
-                    final_msg = "🔥 역대급 가격입니다! 망설임 없이 지르세요."
-                elif diff < best_market_price * 0.05:
-                    final_msg = "✅ 최저가와 비슷합니다. 충분히 메리트 있는 가격입니다."
-                else:
-                    final_msg = f"❌ 관망 추천: 최저가보다 {diff:,}원 더 비쌉니다."
+                all_p = [item['price'] for sublist in d['results'].values() for item in sublist]
+                best_p = min(all_p)
+                diff = int(d['user_price']) - best_p
+                if diff <= 0: final_msg = "🔥 역대급 가격입니다! 망설임 없이 지르세요."
+                elif diff < best_p * 0.05: final_msg = "✅ 최저가와 비슷합니다. 충분히 메리트 있습니다."
+                else: final_msg = f"❌ 관망 추천: 최저가보다 {diff:,}원 더 비쌉니다."
 
-            # [판단결과] 카드
-            st.markdown(f'''<div class="section-card"><span class="section-label">판단결과</span><div class="content-text">{final_msg}</div></div>''', unsafe_allow_html=True)
-
-            # [후기요약] 카드
-            st.markdown(f'''<div class="section-card"><span class="section-label">만족도 후기 요약</span><div class="content-text">{d['s_review']}</div></div>''', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-card"><span class="section-label">판단결과</span><div class="content-text">{final_msg}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-card"><span class="section-label">만족도 후기 요약</span><div class="content-text">{d['s_review']}</div></div>', unsafe_allow_html=True)
             
-            # 2. 시세 목록 (타이틀 박스 제거 및 깔끔한 카드 유지)
+            # 2. 실시간 시세 (타이틀 박스 제거 버전)
             st.markdown('<div class="section-card">', unsafe_allow_html=True)
             for spec, items in sorted(d['results'].items(), reverse=True):
                 best = sorted(items, key=lambda x: x['price'])[0]
@@ -229,20 +192,19 @@ def main():
             st.markdown('</div>', unsafe_allow_html=True)
 
         q_url = urllib.parse.quote(d['name'])
-        st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={q_url}&category=1" target="_blank" class="footer-link">🔗 뽐뿌 원문 검색결과 보기</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={q_url}&category=1" target="_blank" class="footer-link">🔗 뽐뿌 원문 결과 확인</a>', unsafe_allow_html=True)
 
-    # 3. 이력 복원 (입력창 자동 채우기 포함)
+    # 3. 이력 복원 (버튼 클릭 시 상단 입력창 강제 동기화)
     if st.session_state.history:
         st.write("---")
         st.subheader("📜 최근 판독 이력")
         for idx, h in enumerate(st.session_state.history[:5]):
-            if st.button(f"[{h['time']}] {h['name']}", key=f"h_{idx}"):
-                # 결과창 복원
+            if st.button(f"[{h['time']}] {h['name']}", key=f"hist_{idx}"):
+                # [복원 핵심 로직]
+                st.session_state.input_val_name = h['name']
+                st.session_state.input_val_price = h['user_price']
+                st.session_state.input_val_exclude = h['exclude']
                 st.session_state.current_data = h
-                # 입력창 값 복원
-                st.session_state.q_name = h['name']
-                st.session_state.q_price = h['user_price']
-                st.session_state.q_exclude = h['exclude']
                 st.rerun()
 
 if __name__ == "__main__": main()
