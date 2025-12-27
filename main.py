@@ -1,6 +1,4 @@
-
 import streamlit as st
-import streamlit.components.v1 as components
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -8,40 +6,11 @@ import urllib.parse
 from datetime import datetime
 import numpy as np
 
-# [1] 설정
-VERSION = "8.3.8"
-ICON_URL = "https://cdn-icons-png.flaticon.com/512/2933/2933116.png"
-
-st.set_page_config(page_title="지름 판독기", page_icon=ICON_URL, layout="centered")
-
-# [2] PWA 이름/아이콘 강제 주입 (Iframe 우회 스크립트)
-components.html(
-    f"""
-    <script>
-    function forcePWA() {{
-        const target = window.parent.document;
-        // 타이틀 설정
-        target.title = "지름 판독기";
-        // 아이콘 설정
-        let icon = target.querySelector("link[rel='apple-touch-icon']") || target.createElement('link');
-        icon.rel = 'apple-touch-icon';
-        icon.href = '{ICON_URL}';
-        target.getElementsByTagName('head')[0].appendChild(icon);
-        // PWA 이름 설정
-        let meta = target.querySelector("meta[name='apple-mobile-web-app-title']") || target.createElement('meta');
-        meta.name = 'apple-mobile-web-app-title';
-        meta.content = '지름 판독기';
-        target.getElementsByTagName('head')[0].appendChild(meta);
-    }}
-    forcePWA();
-    setTimeout(forcePWA, 2000); // 로딩 후 다시 시도
-    </script>
-    """,
-    height=0,
-)
+# [1] v8.2 표준 설정
+st.set_page_config(page_title="지름 판독기", page_icon="⚖️", layout="centered")
 
 # ==========================================
-# 3. CORE ENGINE (v8.2 정밀 복구)
+# 2. CORE ENGINE (v8.2 무결성 복구)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -51,8 +20,8 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # [핵심] category=8을 가장 앞으로 배치하여 필터 고정
-        url = f"https://m.ppomppu.co.kr/new/search_result.php?category=8&search_type=sub_memo&keyword={encoded_query}"
+        # v8.2 표준 검색 URL
+        url = f"https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={encoded_query}"
         all_data = []
         try:
             res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
@@ -68,7 +37,9 @@ class AdvancedSearchEngine:
 
     @staticmethod
     def categorize_deals(items, user_excludes, search_query):
-        # IQR 로직 및 필터링
+        # [v8.2] IQR 및 스펙 분류 엔진
+        raw_first_word = search_query.strip().split()[0] if search_query else ""
+        clean_first_word = re.sub(r'[^a-zA-Z0-9가-힣]', '', raw_first_word).lower()
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
         total_excludes = base_excludes + [x.strip() for x in user_excludes.split(',') if x.strip()]
         exclude_pattern = re.compile('|'.join(map(re.escape, total_excludes)))
@@ -77,6 +48,8 @@ class AdvancedSearchEngine:
         raw_results = []
         for item in items:
             title = item['title']
+            clean_title = re.sub(r'[^a-zA-Z0-9가-힣]', '', title).lower()
+            if clean_first_word and clean_first_word not in clean_title: continue
             if exclude_pattern.search(title): continue
             found = price_pattern.findall(title)
             if not found: continue
@@ -105,21 +78,23 @@ class AdvancedSearchEngine:
         return categorized
 
 # ==========================================
-# 4. UI/UX (디자인/리셋/버전)
+# 3. UI/UX (v8.2 디자인 원복)
 # ==========================================
 def apply_style():
-    st.markdown(f"""
+    st.markdown("""
         <style>
-        [data-testid="stAppViewContainer"] {{ background-color: #000000 !important; }}
-        .main-header {{ padding: 1.5rem 0; text-align: center; }}
-        .main-title {{ font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; }}
-        .stButton>button {{ width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }}
-        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button {{ background-color: #00FF88 !important; color: #000 !important; }}
-        div[data-testid="stColumn"]:nth-of-type(2) .stButton>button {{ background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }}
-        .section-card {{ background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }}
-        .price-tag {{ color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }}
-        .footer-link {{ background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }}
-        .version-tag {{ text-align: center; color: #444; font-size: 0.7rem; margin-top: 40px; }}
+        [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
+        label p { color: #FFFFFF !important; font-weight: 500 !important; }
+        .main-header { padding: 1.5rem 0; text-align: center; }
+        .main-title { font-size: 1.8rem; font-weight: 800; color: #00FF88 !important; }
+        .stTextInput input { background-color: #FFFFFF !important; color: #000000 !important; border-radius: 8px; }
+        .stButton>button { width: 100%; border-radius: 8px; height: 3rem; font-weight: 700; }
+        div[data-testid="stColumn"]:nth-of-type(1) .stButton>button { background-color: #00FF88 !important; color: #000 !important; }
+        div[data-testid="stColumn"]:nth-of-type(2) .stButton>button { background-color: transparent !important; color: #FF4B4B !important; border: 1px solid #FF4B4B !important; }
+        .section-card { background: #111111; border: 1px solid #333; border-radius: 12px; padding: 18px; margin-bottom: 12px; }
+        .price-tag { color: #00FF88 !important; font-size: 1.5rem; font-weight: 800; float: right; }
+        .footer-link { background: #1A1A1A; color: #00FF88 !important; padding: 14px; border-radius: 10px; text-align: center; text-decoration: none; display: block; font-weight: 700; border: 1px solid #333; margin-top: 20px; }
+        .version-tag { text-align: center; color: #444; font-size: 0.7rem; margin-top: 40px; border-top: 1px solid #222; padding-top: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -134,7 +109,7 @@ def main():
     st.markdown('<div class="main-header"><div class="main-title">⚖️ 지름 판독기</div></div>', unsafe_allow_html=True)
 
     st.session_state.input_name = st.text_input("📦 검색 모델명", value=st.session_state.input_name)
-    st.session_state.input_price = st.text_input("💰 나의 가격 (숫자)", value=st.session_state.input_price)
+    st.session_state.input_price = st.text_input("💰 나의 가격 (숫자만)", value=st.session_state.input_price)
 
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -155,16 +130,25 @@ def main():
 
     if st.session_state.current_data:
         d = st.session_state.current_data
+        st.write("---")
         if d['results']:
             for spec, items in sorted(d['results'].items(), reverse=True):
                 best = sorted(items, key=lambda x: x['price'])[0]
                 st.markdown(f'<div class="section-card"><span class="price-tag">{best["price"]:,}원</span><b>[{spec}]</b><br>{best["title"]}</div>', unsafe_allow_html=True)
 
-        # 뽐뿌게시판 카테고리 고정 링크
         q_url = urllib.parse.quote(d['name'])
-        fixed_link = f"https://m.ppomppu.co.kr/new/search_result.php?category=8&search_type=sub_memo&keyword={q_url}"
-        st.markdown(f'<a href="{fixed_link}" target="_blank" class="footer-link">🔗 뽐뿌게시판 실시간 결과 보기</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?category=8&search_type=sub_memo&keyword={q_url}" target="_blank" class="footer-link">🔗 뽐뿌게시판 실시간 결과 보기</a>', unsafe_allow_html=True)
 
-    st.markdown(f'<div class="version-tag">⚖️ 지름 판독기 PRO v{VERSION}</div>', unsafe_allow_html=True)
+    if st.session_state.history:
+        st.write("---")
+        st.subheader("📜 최근 판독 이력")
+        for h in st.session_state.history[:3]:
+            if st.button(f"[{h['time']}] {h['name']}", key=f"h_{h['time']}"):
+                st.session_state.current_data = h
+                st.session_state.input_name = h['name']
+                st.session_state.input_price = h['price']
+                st.rerun()
+
+    st.markdown('<div class="version-tag">⚖️ 지름 판독기 PRO v8.2.1</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
