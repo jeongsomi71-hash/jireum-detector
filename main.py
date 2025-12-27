@@ -41,7 +41,7 @@ class AdvancedSearchEngine:
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
         total_excludes = base_excludes + [x.strip() for x in user_excludes.split(',') if x.strip()]
         
-        exclude_pattern = re.compile('|'.join(map(re.escape, total_excludes)))
+        exclude_pattern = re.compile('|'.join(map.re.escape, total_excludes)))
         price_pattern = re.compile(r'([0-9,]{1,10})\s?(원|만)')
         
         raw_results = []
@@ -98,21 +98,16 @@ class AdvancedSearchEngine:
 
     @staticmethod
     def get_recommendations(query):
-        # 추천 검색어 생성 로직
         words = query.strip().split()
         first = words[0]
-        recos = [
-            f"{first} 최저가", 
-            f"{first} 핫딜",
-            f"{' '.join(words[:2])}" if len(words) > 1 else f"{first} 가격"
-        ]
+        recos = [f"{first} 최저가", f"{first} 핫딜", f"{first} 가격"]
         return recos
 
 # ==========================================
 # 2. UI 메인 로직
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v6.3", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v6.4", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -128,7 +123,6 @@ def apply_style():
         .stButton>button { width: 100%; border: 2px solid #00FF88 !important; background-color: #000000 !important; color: #00FF88 !important; font-weight: bold !important; height: 3.5rem; }
         .link-btn { background-color: #1A1A1A !important; color: #00FF88 !important; padding: 12px; border-radius: 5px; text-align: center; font-size: 1rem; border: 1px solid #00FF88; text-decoration: none; display: block; margin-bottom: 8px; font-weight: bold; }
         .guide-box { background-color: #332200; border: 1px solid #FFD700; color: #FFD700; padding: 15px; border-radius: 8px; margin: 10px 0; font-size: 0.9rem; }
-        .reco-tag { background-color: #222; color: #00FF88; padding: 5px 10px; border-radius: 15px; border: 1px solid #00FF88; display: inline-block; margin-right: 5px; margin-top: 5px; font-size: 0.8rem; cursor: pointer; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -136,12 +130,14 @@ def main():
     apply_style()
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
+    if 'query_input' not in st.session_state: st.session_state.query_input = ""
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v6.3</div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v6.4</div>', unsafe_allow_html=True)
 
-    in_name = st.text_input("📦 제품명 입력", value=st.session_state.get('s_name', ""))
-    in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.get('s_price', ""))
-    in_exclude = st.text_input("🚫 제외 단어", value="직구, 해외, 렌탈, 당근, 중고")
+    # 입력창과 리셋 기능 연결
+    in_name = st.text_input("📦 제품명 입력", value=st.session_state.query_input, key="name_input")
+    in_price = st.text_input("💰 나의 확인가 (숫자만)", key="price_input")
+    in_exclude = st.text_input("🚫 제외 단어", value="직구, 해외, 렌탈, 당근, 중고", key="exclude_input")
 
     c1, c2 = st.columns([3, 1])
     with c1:
@@ -157,6 +153,8 @@ def main():
                     st.rerun()
     with c2:
         if st.button("🔄 리셋"):
+            # 입력창을 포함한 모든 상태 초기화
+            st.session_state.query_input = ""
             st.session_state.current_data = None
             st.rerun()
 
@@ -168,11 +166,18 @@ def main():
             st.markdown(f'''
             <div class="guide-box">
                 ⚠️ <b>시세 정보 추출 실패</b><br>
-                입력하신 핵심 키워드 "{first_term}"가 포함된 유효한 가격 정보가 없습니다.<br><br>
-                💡 <b>더 잘 검색되는 추천 조합:</b><br>
-                {''.join([f'<span class="reco-tag">{r}</span>' for r in AdvancedSearchEngine.get_recommendations(d['name'])])}
+                입력하신 핵심 키워드 "{first_term}"가 포함된 유효한 가격 정보가 없습니다<br><br>
+                💡 <b>더 잘 검색되는 추천 조합:</b> (클릭하여 검색어 변경)
             </div>
             ''', unsafe_allow_html=True)
+            
+            # 추천 검색어 자동 입력을 위한 버튼화
+            recos = AdvancedSearchEngine.get_recommendations(d['name'])
+            cols = st.columns(len(recos))
+            for i, reco in enumerate(recos):
+                if cols[i].button(reco):
+                    st.session_state.query_input = reco
+                    st.rerun()
         else:
             box_class = f"{d['s_type']}-box" if d['s_type'] else "neu-box"
             st.markdown(f'<div class="sentiment-highlight {box_class}">{d["s_msg"]}</div>', unsafe_allow_html=True)
@@ -200,9 +205,10 @@ def main():
         st.subheader("📜 최근 판독 이력")
         for idx, h in enumerate(st.session_state.history[:10]):
             if st.button(f"[{h['time']}] {h['name']}", key=f"hi_{idx}"):
+                st.session_state.query_input = h['name']
                 st.session_state.current_data = h
                 st.rerun()
 
-    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v6.3 - Smart Recommendations Added</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v6.4 - User Feedback Optimized</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
