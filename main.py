@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -8,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 엔진 (유연한 매칭 및 모바일 경로)
+# 1. 시세 분석 엔진 (뽐뿌 집중 및 정밀 필터)
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -18,42 +17,28 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # 클리앙: 404 방지를 위해 모바일 검색 경로 사용
-        sites = {
-            "뽐뿌": f"https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={encoded_query}&category=1",
-            "클리앙": f"https://www.clien.net/service/board/all_use?sk=title&sv={encoded_query}"
-        }
+        # 뽐뿌 전용 검색 주소
+        url = f"https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={encoded_query}&category=1"
         all_data = []
-        for name, url in sites.items():
-            try:
-                res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
-                # 클리앙 404 체크 및 대안 경로 시도
-                if res.status_code == 404 and name == "클리앙":
-                    url = f"https://www.clien.net/service/search?q={encoded_query}&boardName=all_use"
-                    res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
-                
-                soup = BeautifulSoup(res.text, 'html.parser')
-                
-                if name == "뽐뿌":
-                    items = soup.select('.title')
-                    for item in items:
-                        for extra in item.find_all(['span', 'em', 'font']):
-                            extra.decompose()
-                        p_title = item.get_text(strip=True)
-                        p_title = re.sub(r'[\(\[]\d+[\)\]]$', '', p_title).strip()
-                        if p_title: all_data.append({"title": p_title})
-                else: # 클리앙
-                    items = soup.select('.subject_fixed')
-                    for item in items:
-                        p_title = item.get_text(strip=True)
-                        p_title = re.sub(r'[\(\[]\d+[\)\]]$', '', p_title).strip()
-                        if p_title: all_data.append({"title": p_title})
-            except: continue
+        try:
+            res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            
+            items = soup.select('.title')
+            for item in items:
+                # 불필요한 태그(댓글수 등) 제거
+                for extra in item.find_all(['span', 'em', 'font']):
+                    extra.decompose()
+                p_title = item.get_text(strip=True)
+                # 제목 끝의 [숫자] 패턴 제거
+                p_title = re.sub(r'[\(\[]\d+[\)\]]$', '', p_title).strip()
+                if p_title: all_data.append({"title": p_title})
+        except: pass
         return all_data
 
     @staticmethod
     def categorize_deals(items, user_excludes, search_query):
-        # [수정] 첫 단어 매칭 로직 유연화 (공백 제거 후 비교)
+        # 첫 단어 매칭 로직 (유연한 비교)
         first_word = search_query.strip().split()[0].lower() if search_query else ""
         clean_first_word = re.sub(r'[^a-zA-Z0-9가-힣]', '', first_word)
         
@@ -69,27 +54,30 @@ class AdvancedSearchEngine:
             title = item['title']
             clean_title = re.sub(r'[^a-zA-Z0-9가-힣]', '', title.lower())
             
-            # 유연한 포함 여부 확인
+            # 첫 단어 필수 포함 확인
             if clean_first_word and clean_first_word not in clean_title: continue
             
             if exclude_pattern.search(title): continue
             found = price_pattern.findall(title)
             if not found: continue
             
+            # 가격 숫자 변환
             num = int(found[0][0].replace(',', ''))
             if found[0][1] == '만': num *= 10000
             if num < 5000: continue 
 
+            # 상품권/사은품 가격 오탐지 방지
             if any(k in title for k in gift_keywords) and num < 100000: continue
 
             raw_results.append({"price": num, "title": title})
 
         if not raw_results: return {}
 
+        # IQR 기반 이상치 제거
         prices = [x['price'] for x in raw_results]
         q1, q3 = np.percentile(prices, [25, 75])
         iqr = q3 - q1
-        lower_bound = q1 - (1.5 * iqr) # 범위를 다시 v5.4 수준으로 소폭 완화
+        lower_bound = q1 - (1.5 * iqr)
         upper_bound = q3 + (1.5 * iqr)
         filtered_results = [x for x in raw_results if lower_bound <= x['price'] <= upper_bound]
 
@@ -123,7 +111,7 @@ class AdvancedSearchEngine:
 # 2. UI 메인 로직
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v6.0", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v6.1", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -147,7 +135,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v6.0</div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v6.1</div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.get('s_name', ""))
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.get('s_price', ""))
@@ -177,9 +165,9 @@ def main():
             st.markdown(f'''
             <div class="guide-box">
                 ⚠️ <b>시세 정보 추출 실패</b><br>
-                입력하신 핵심 키워드가 포함된 유효한 가격 정보가 없습니다.<br>
-                - <b>영문/한글</b> 혼용 검색 시 한글 우선 입력을 추천합니다.<br>
-                - 검색어의 첫 단어를 조금 더 단순하게 바꿔보세요.
+                입력하신 핵심 키워드("{d['name'].split()[0]}")가 포함된 유효한 가격 정보가 없습니다.<br>
+                - 검색어를 조금 더 단순하게 입력해보세요.<br>
+                - 뽐뿌 게시판에 해당 모델의 최근 게시글이 있는지 확인이 필요합니다.
             </div>
             ''', unsafe_allow_html=True)
         else:
@@ -202,10 +190,7 @@ def main():
                     else: st.markdown(f'<div style="padding:12px; border-radius:8px; font-weight:900; text-align:center; margin-top:10px; background:#4d0000; color:#FF5555;">❌ 차액 {diff:,}원 발생</div>', unsafe_allow_html=True)
 
         eq = urllib.parse.quote(d['name'])
-        cl1, cl2 = st.columns(2)
-        cl1.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={eq}&category=1" class="link-btn" target="_blank">뽐뿌 바로가기</a>', unsafe_allow_html=True)
-        # 클리앙 모바일(m.clien.net) 경로를 사용하여 404 방지 및 사용기 게시판 고정
-        cl2.markdown(f'<a href="https://www.clien.net/service/board/all_use?sk=title&sv={eq}" class="link-btn" target="_blank">클리앙 사용기</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={eq}&category=1" class="link-btn" target="_blank">뽐뿌 게시판 바로가기</a>', unsafe_allow_html=True)
 
     if st.session_state.history:
         st.write("---")
@@ -215,6 +200,6 @@ def main():
                 st.session_state.current_data = h
                 st.rerun()
 
-    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v6.0 - Smart Match & Anti-404 Link</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v6.1 - Clien Removed & Ppomppu Focused</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
