@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -8,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 # ==========================================
-# 1. 시세 분석 엔진 (뽐뿌 집중 및 정밀 필터)
+# 1. 시세 분석 엔진
 # ==========================================
 class AdvancedSearchEngine:
     @staticmethod
@@ -18,20 +17,16 @@ class AdvancedSearchEngine:
     @staticmethod
     def search_all(product_name):
         encoded_query = urllib.parse.quote(product_name)
-        # 뽐뿌 전용 검색 주소
         url = f"https://m.ppomppu.co.kr/new/search_result.php?search_type=sub_memo&keyword={encoded_query}&category=1"
         all_data = []
         try:
             res = requests.get(url, headers=AdvancedSearchEngine.get_mobile_headers(), timeout=10)
             soup = BeautifulSoup(res.text, 'html.parser')
-            
             items = soup.select('.title')
             for item in items:
-                # 불필요한 태그(댓글수 등) 제거
                 for extra in item.find_all(['span', 'em', 'font']):
                     extra.decompose()
                 p_title = item.get_text(strip=True)
-                # 제목 끝의 [숫자] 패턴 제거
                 p_title = re.sub(r'[\(\[]\d+[\)\]]$', '', p_title).strip()
                 if p_title: all_data.append({"title": p_title})
         except: pass
@@ -39,9 +34,8 @@ class AdvancedSearchEngine:
 
     @staticmethod
     def categorize_deals(items, user_excludes, search_query):
-        # 첫 단어 매칭 로직 (유연한 비교)
-        first_word = search_query.strip().split()[0].lower() if search_query else ""
-        clean_first_word = re.sub(r'[^a-zA-Z0-9가-힣]', '', first_word)
+        raw_first_word = search_query.strip().split()[0] if search_query else ""
+        clean_first_word = re.sub(r'[^a-zA-Z0-9가-힣]', '', raw_first_word).lower()
         
         gift_keywords = ["상품권", "증정", "페이백", "포인트", "캐시백", "이벤트", "경품"]
         base_excludes = ["중고", "사용감", "리퍼", "S급", "민팃", "삽니다", "매입"]
@@ -53,28 +47,23 @@ class AdvancedSearchEngine:
         raw_results = []
         for item in items:
             title = item['title']
-            clean_title = re.sub(r'[^a-zA-Z0-9가-힣]', '', title.lower())
+            clean_title = re.sub(r'[^a-zA-Z0-9가-힣]', '', title).lower()
             
-            # 첫 단어 필수 포함 확인
             if clean_first_word and clean_first_word not in clean_title: continue
-            
             if exclude_pattern.search(title): continue
+            
             found = price_pattern.findall(title)
             if not found: continue
             
-            # 가격 숫자 변환
             num = int(found[0][0].replace(',', ''))
             if found[0][1] == '만': num *= 10000
             if num < 5000: continue 
 
-            # 상품권/사은품 가격 오탐지 방지
             if any(k in title for k in gift_keywords) and num < 100000: continue
-
             raw_results.append({"price": num, "title": title})
 
         if not raw_results: return {}
 
-        # IQR 기반 이상치 제거
         prices = [x['price'] for x in raw_results]
         q1, q3 = np.percentile(prices, [25, 75])
         iqr = q3 - q1
@@ -91,7 +80,6 @@ class AdvancedSearchEngine:
             elif any(k in t_low for k in ["6인용", "6인"]): spec_tag = "6인용"
             if "256" in t_low: spec_tag += " 256G"
             elif "512" in t_low: spec_tag += " 512G"
-
             if spec_tag not in categorized: categorized[spec_tag] = []
             categorized[spec_tag].append(item)
         return {k: v for k, v in categorized.items() if v}
@@ -108,11 +96,23 @@ class AdvancedSearchEngine:
         if n > p: return "neg", "🧊 **주의**: 최근 평이 좋지 않거나 종료된 딜일 수 있습니다."
         return "neu", "💬 **안정**: 현재 시세와 실사용 여론은 평이한 수준입니다."
 
+    @staticmethod
+    def get_recommendations(query):
+        # 추천 검색어 생성 로직
+        words = query.strip().split()
+        first = words[0]
+        recos = [
+            f"{first} 최저가", 
+            f"{first} 핫딜",
+            f"{' '.join(words[:2])}" if len(words) > 1 else f"{first} 가격"
+        ]
+        return recos
+
 # ==========================================
 # 2. UI 메인 로직
 # ==========================================
 def apply_style():
-    st.set_page_config(page_title="지름신 판독기 PRO v6.1", layout="centered")
+    st.set_page_config(page_title="지름신 판독기 PRO v6.3", layout="centered")
     st.markdown("""
         <style>
         [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
@@ -128,6 +128,7 @@ def apply_style():
         .stButton>button { width: 100%; border: 2px solid #00FF88 !important; background-color: #000000 !important; color: #00FF88 !important; font-weight: bold !important; height: 3.5rem; }
         .link-btn { background-color: #1A1A1A !important; color: #00FF88 !important; padding: 12px; border-radius: 5px; text-align: center; font-size: 1rem; border: 1px solid #00FF88; text-decoration: none; display: block; margin-bottom: 8px; font-weight: bold; }
         .guide-box { background-color: #332200; border: 1px solid #FFD700; color: #FFD700; padding: 15px; border-radius: 8px; margin: 10px 0; font-size: 0.9rem; }
+        .reco-tag { background-color: #222; color: #00FF88; padding: 5px 10px; border-radius: 15px; border: 1px solid #00FF88; display: inline-block; margin-right: 5px; margin-top: 5px; font-size: 0.8rem; cursor: pointer; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -136,7 +137,7 @@ def main():
     if 'history' not in st.session_state: st.session_state.history = []
     if 'current_data' not in st.session_state: st.session_state.current_data = None
 
-    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v6.1</div>', unsafe_allow_html=True)
+    st.markdown('<div class="unified-header">⚖️ 지름신 판독기 PRO v6.3</div>', unsafe_allow_html=True)
 
     in_name = st.text_input("📦 제품명 입력", value=st.session_state.get('s_name', ""))
     in_price = st.text_input("💰 나의 확인가 (숫자만)", value=st.session_state.get('s_price', ""))
@@ -163,12 +164,13 @@ def main():
         d = st.session_state.current_data
         
         if not d['results']:
+            first_term = d['name'].split()[0]
             st.markdown(f'''
             <div class="guide-box">
                 ⚠️ <b>시세 정보 추출 실패</b><br>
-                입력하신 핵심 키워드("{d['name'].split()[0]}")가 포함된 유효한 가격 정보가 없습니다.<br>
-                - 검색어를 조금 더 단순하게 입력해보세요.<br>
-                - 뽐뿌 게시판에 해당 모델의 최근 게시글이 있는지 확인이 필요합니다.
+                입력하신 핵심 키워드 "{first_term}"가 포함된 유효한 가격 정보가 없습니다.<br><br>
+                💡 <b>더 잘 검색되는 추천 조합:</b><br>
+                {''.join([f'<span class="reco-tag">{r}</span>' for r in AdvancedSearchEngine.get_recommendations(d['name'])])}
             </div>
             ''', unsafe_allow_html=True)
         else:
@@ -201,6 +203,6 @@ def main():
                 st.session_state.current_data = h
                 st.rerun()
 
-    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v6.1 - Clien Removed & Ppomppu Focused</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; color:#444; font-size:0.8rem; margin-top:50px; font-weight:bold;">Version: v6.3 - Smart Recommendations Added</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__": main()
